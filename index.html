@@ -114,14 +114,16 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
 #dock.min .di small,#dock.min .full{display:none}
 #dock.min .dh{justify-content:center;gap:2px;padding:8px 2px}
 #dock .short{display:none}
-#dock .km{display:block;margin-top:2px;font-size:12px;font-weight:700;color:#1d4ed8;white-space:nowrap}
+#dock .km{display:block;margin-top:1px;margin-bottom:2px;font-size:12px;font-weight:700;color:#1d4ed8}
 #dock .km.zero{color:#a16207;font-weight:600}
 #dock .km.long{color:#c2410c}
 #dock .skm{display:none;font-size:10px;font-weight:700;color:#1d4ed8;line-height:1.1}
 #dock .skm.zero{color:#a16207}#dock .skm.long{color:#c2410c}
 #dock.min .skm{display:block}
 #dock .tot{padding:7px 10px;background:#eff6ff;border-bottom:1px solid var(--line);font-size:12px;line-height:1.35;color:#1e3a8a}
-#dock.min .tot,#dock.min .km{display:none}
+#dock.min .tot,#dock.min .km,#dock.min .dln{display:none}
+#dock .dln{display:block;margin-top:3px;font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dock .di small.dln2{color:#334155}
 #dock.min .short{display:inline}
 .mk .rs{position:absolute;left:-7px;top:-8px;font-size:12px}
 .pill.res.on{background:#16a34a;color:#fff}
@@ -1096,23 +1098,25 @@ const fmtH = h=>{ const m=Math.round(h*60/5)*5; return Math.floor(m/60)+'h'+Stri
 const nf = n=>n.toLocaleString('pt-BR');
 function nightNo(k){ let n=1; while(k-n>=0 && DAYS[k-n].night===DAYS[k].night && DAYS[k].night!=null) n++; return n; }
 function renderDock(){
-  const td=todayStr(), tk=DAYS.findIndex(d=>d.dt===td);
+  const td=todayStr(), tk=DAYS.findIndex(d=>d.dt===td), st=DATA.stops;
   const all=DAYS.map((d,k)=>dayKm(k)); const totKm=all.reduce((x,a)=>x+a.km,0), totH=all.reduce((x,a)=>x+a.h,0);
   const done = tk>=0 ? all.slice(0,tk).reduce((x,a)=>x+a.km,0) : 0;
-  const head = `<div class="tot">🚐 <b>Total: ${nf(totKm)} km</b> · ~${Math.round(totH)} h dirigindo${tk>=0?`<br>✔️ Já rodado: ${nf(done)} km · faltam ${nf(totKm-done)} km`:''}<br><span style="color:var(--mut)">Em cada dia: km e tempo ao volante de motorhome (sem contar paradas).</span></div>`;
+  const head = `<div class="tot"><b>🚐 Viagem toda: ${nf(totKm)} km</b><br>~${Math.round(totH)} h ao volante${tk>=0?`<br>✔️ Já rodado: ${nf(done)} km · faltam ${nf(totKm-done)} km`:''}<br><span style="color:var(--mut)">Os tempos são só de estrada (sem paradas), já ajustados para motorhome.</span></div>`;
   document.getElementById('dockList').innerHTML = head + DAYS.map((d,k)=>{
-    const st=DATA.stops;
-    const txt = d.free ? `Livre em ${esc(shortN(st[d.to].n))}` : (k===0 ? esc(d.idx.map(i=>shortN(st[i].n)).join(' → ')) : `${esc(shortN(st[d.from].n))} → ${esc(shortN(st[d.to].n))}`);
-    const nn = !d.free && d.night!=null ? (DAYS[k+1]&&DAYS[k+1].free?' · 🌙2n':' · 🌙') : '';
-    const rs = resForNight(d.dt);
-    const rsTxt = rs.length ? `<small class="rsv">${rs.every(r=>isNM(r.place_id))?'☑️':'✅'} ${esc(rs.map(r=>(byId[r.place_id]||{n:r.nome}).n).join(', '))}</small>` : '';
-    const rk = rs.length&&rs.every(r=>isNM(r.place_id))?'☑️':'✅';
-    const D=all[k], longD=D.h>=5;
-    const kmTxt = d.free ? `<span class="km zero">🛋️ 0 km · ${nightNo(k)}ª noite em ${esc(shortN(DATA.stops[d.to].n))}</span>`
-      : `<span class="km${longD?' long':''}">🚐 ${nf(D.km)} km · ~${fmtH(D.h)}${longD?' · dia longo':''}</span>`;
+    const D=all[k], longD=D.h>=5, last=k===DAYS.length-1;
+    const rs = resForNight(d.dt); const rk = rs.length&&rs.every(r=>isNM(r.place_id))?'☑️':'✅';
+    const route = k===0 ? d.idx.map(i=>shortN(st[i].n)) : [shortN(st[d.from].n), shortN(st[d.to].n)];
+    let body;
+    if(d.free) body = `<span class="dln">📍 Fica em ${esc(shortN(st[d.to].n))}</span><span class="km zero">Sem viagem neste dia (0 km)</span>`;
+    else body = `<span class="dln">🚐 ${esc(route.join(' → '))}</span><span class="km${longD?' long':''}">${nf(D.km)} km · ~${fmtH(D.h)} de estrada${longD?' ⚠️ dia longo':''}</span>`;
+    const ns = st[d.night!=null?d.night:d.to];
+    let sleep;
+    if(last) sleep = `<small class="dln2">🏁 Devolução do motorhome</small>`;
+    else if(rs.length) sleep = `<small class="rsv">🌙 ${rk} ${esc(rs.map(r=>isNM(r.place_id)?'Dorme em '+shortN(ns.n)+(r.obs?' ('+r.obs+')':''):(byId[r.place_id]||{n:r.nome}).n).join(', '))}</small>`;
+    else sleep = `<small class="dln2">🌙 Dorme em ${esc(shortN(ns.n))}${d.free?` (${nightNo(k)}ª noite)`:''}</small>`;
     const skm = `<span class="skm${d.free?' zero':longD?' long':''}">${d.free?'0':nf(D.km)}<span style="font-weight:400">km</span></span>`;
     const na = attrOf(d.dt).length; const atTxt = na && F.lay!=='camp' ? `<small class="atc" onclick="event.stopPropagation();dayAttr(${k})">🎡 ${na} atraç${na>1?'ões':'ão'}</small>` : '';
-    return `<div class="di${d.free?' free':''}${dockOn===k?' on':''}${d.dt===td?' td':''}" id="dk${k}" onclick="goDay(${k})"><b><span class="full">D${d.n} · ${d.dt}${nn}${rs.length?' '+rk:''}</span><span class="short">${d.n}${rs.length?rk:''}</span></b>${skm}<small>${txt}</small>${kmTxt}${rsTxt}${atTxt}</div>`;
+    return `<div class="di${d.free?' free':''}${dockOn===k?' on':''}${d.dt===td?' td':''}" id="dk${k}" onclick="goDay(${k})"><b><span class="full">Dia ${d.n} · ${dW(isoFromBR(d.dt))}${d.dt===td?' · HOJE':''}</span><span class="short">${d.n}${rs.length?rk:''}</span></b>${skm}${body}${sleep}${atTxt}</div>`;
   }).join('');
 }
 function goDay(k){
