@@ -99,6 +99,22 @@ html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Seg
 .btn.star.on{background:#facc15;color:#422006}
 .banner{position:fixed;left:10px;right:10px;top:calc(var(--safe-t) + 58px);z-index:600;background:#facc15;color:#422006;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700;display:none;box-shadow:0 2px 10px rgba(0,0,0,.2)}
 .banner.show{display:flex;justify-content:space-between;align-items:center;gap:8px}
+ #dock{position:fixed;left:10px;top:calc(var(--safe-t) + 58px);z-index:550;background:rgba(255,255,255,.97);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.22);width:230px;max-height:calc(100vh - var(--safe-t) - 150px - var(--safe-b));display:flex;flex-direction:column;overflow:hidden}
+body.favon #dock{top:calc(var(--safe-t) + 108px)}
+#dock .dh{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#14213d;color:#fff;font-weight:700;font-size:13px;cursor:pointer;flex:none}
+#dock .dl{overflow-y:auto;-webkit-overflow-scrolling:touch}
+#dock .di{padding:7px 10px;border-bottom:1px solid var(--line);font-size:12px;cursor:pointer;line-height:1.25}
+#dock .di b{font-size:13px}
+#dock .di small{display:block;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dock .di.on{background:#dbeafe}
+#dock .di.td{border-left:4px solid #2563eb}
+#dock .di.free small{color:#a16207}
+#dock.min{width:46px}
+#dock.min .di{padding:6px 0;text-align:center}
+#dock.min .di small,#dock.min .full{display:none}
+#dock.min .dh{justify-content:center;gap:2px;padding:8px 2px}
+#dock .short{display:none}
+#dock.min .short{display:inline}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + var(--safe-b));z-index:2000;background:#14213d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
@@ -112,6 +128,7 @@ html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Seg
 </div>
 <div class="banner" id="favBanner"><span>⭐ Mostrando só os favoritos</span><button class="pill" onclick="toggleFavMode()">Mostrar tudo</button></div>
 <div class="toast" id="toast"></div>
+<div id="dock"><div class="dh" onclick="toggleDock()"><span class="full">📅 Dias do roteiro</span><span class="short">📅</span><span id="dockArr">◀</span></div><div class="dl" id="dockList"></div></div>
 <div id="fabs">
   <button class="fab" id="fabLoc" onclick="toggleFollow()" title="Minha localização">📍</button>
   <button class="fab" onclick="chooseBase()" title="Tipo de mapa">🛰️</button>
@@ -235,7 +252,7 @@ function draw(){
   });
   document.getElementById('favN').textContent = FAV.size;
   document.getElementById('favPill').classList.toggle('on',F.onlyFav);
-  document.getElementById('favBanner').classList.toggle('show',F.onlyFav);
+  document.getElementById('favBanner').classList.toggle('show',F.onlyFav); document.body.classList.toggle('favon',F.onlyFav);
   cluster.addLayers(arr);
 }
 const byId = {}; DATA.places.forEach(p=>byId[p.id]=p);
@@ -563,6 +580,55 @@ async function submitAdd(i){
 window.addEventListener('online', sync);
 setInterval(()=>{ if(document.visibilityState==='visible') sync(); }, 120000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') sync(); });
+
+
+// ================= painel de dias =================
+const DAYS = (()=>{ const byD={}; DATA.stops.forEach((s,i)=>{ (byD[s.data]=byD[s.data]||[]).push(i); });
+  const out=[]; let lastNight=0;
+  for(let d=new Date(2026,11,14), n=1; d<=new Date(2027,0,13); d.setDate(d.getDate()+1), n++){
+    const dt=String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
+    const idx=byD[dt];
+    if(idx){ const from=lastNight; const last=idx[idx.length-1]; const night=idx.filter(i=>DATA.stops[i].pn).pop();
+      out.push({n,dt,from,to:last,idx,free:false,night:night!=null?night:null}); if(night!=null) lastNight=night; else lastNight=last; }
+    else out.push({n,dt,from:lastNight,to:lastNight,idx:[lastNight],free:true,night:lastNight});
+  } return out; })();
+const SIDX = (()=>{ const r=DATA.route, res=[]; let start=0;
+  DATA.stops.forEach(s=>{ let best=start, bd=1e9; for(let k=start;k<r.length;k++){ const dd=(r[k][0]-s.lat)**2+(r[k][1]-s.lon)**2; if(dd<bd){bd=dd;best=k;} } res.push(best); start=best; }); return res; })();
+const segLayer = L.layerGroup().addTo(map);
+let dockOn = null;
+const shortN = n=>n.split('(')[0].split('–')[0].trim();
+function renderDock(){
+  const td=todayStr();
+  document.getElementById('dockList').innerHTML = DAYS.map((d,k)=>{
+    const st=DATA.stops;
+    const txt = d.free ? `Livre em ${esc(shortN(st[d.to].n))}` : (k===0 ? esc(d.idx.map(i=>shortN(st[i].n)).join(' → ')) : `${esc(shortN(st[d.from].n))} → ${esc(shortN(st[d.to].n))}`);
+    const nn = !d.free && d.night!=null ? (DAYS[k+1]&&DAYS[k+1].free?' · 🌙2n':' · 🌙') : '';
+    return `<div class="di${d.free?' free':''}${dockOn===k?' on':''}${d.dt===td?' td':''}" id="dk${k}" onclick="goDay(${k})"><b><span class="full">D${d.n} · ${d.dt}${nn}</span><span class="short">${d.n}</span></b><small>${txt}</small></div>`;
+  }).join('');
+}
+function goDay(k){
+  const d=DAYS[k]; dockOn=k; renderDock(); openTab('mapa'); closeSheet(); segLayer.clearLayers();
+  const st=DATA.stops;
+  if(d.free){ const s=st[d.to]; map.setView([s.lat,s.lon],11); toast(`Dia ${d.n} (${d.dt}): dia livre em ${shortN(s.n)}`); return; }
+  const a=Math.min(SIDX[d.from],SIDX[d.to]), b=Math.max(SIDX[d.from],SIDX[d.to]);
+  const seg=DATA.route.slice(a,b+1);
+  const pts = seg.length>1 ? seg : [[st[d.from].lat,st[d.from].lon],[st[d.to].lat,st[d.to].lon]];
+  L.polyline(pts,{color:'#fff',weight:10,opacity:.9}).addTo(segLayer);
+  L.polyline(pts,{color:'#f97316',weight:6,opacity:1}).addTo(segLayer);
+  const all = pts.concat((k===0?d.idx:[d.from].concat(d.idx)).map(i=>[st[i].lat,st[i].lon]));
+  const narrow = window.innerWidth<700, dockW = document.getElementById('dock').classList.contains('min')?56:240;
+  map.fitBounds(L.latLngBounds(all),{paddingTopLeft:[narrow?20:dockW+10,80],paddingBottomRight:[70,40],maxZoom:12});
+  const leg = d.idx.map(i=>i).filter(i=>i>0).map(i=>DATA.legs[i-1]).filter(Boolean);
+  const kmT = leg.reduce((x,l)=>x+l.km,0), hT=leg.reduce((x,l)=>x+l.h,0);
+  toast(`Dia ${d.n} (${d.dt}): ${shortN(st[d.from].n)} → ${shortN(st[d.to].n)}${kmT?` · ~${kmT} km, ~${hT.toFixed(1)} h`:''}`,4000);
+}
+function toggleDock(force){
+  const el=document.getElementById('dock'); const min = force!=null ? force : !el.classList.contains('min');
+  el.classList.toggle('min',min); document.getElementById('dockArr').textContent = min?'▶':'◀'; store.set('dockMin',min);
+}
+renderDock();
+toggleDock(store.get('dockMin', window.innerWidth<700));
+(()=>{ const i=DAYS.findIndex(d=>d.dt===todayStr()); if(i>=0) setTimeout(()=>{ const e=document.getElementById('dk'+i); if(e) e.scrollIntoView({block:'center'}); },300); })();
 
 renderFilt(); renderRot(); draw(); fitRoute(); sync();
 if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
