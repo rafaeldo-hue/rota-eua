@@ -1,5 +1,5 @@
 
-const APP='rotaeua-app-v2', TILES='rotaeua-tiles-v1';
+const APP='rotaeua-app-v3', TILES='rotaeua-tiles-v1';
 const SHELL=['./','index.html','manifest.json','icon-192.png',
  'leaflet.css','leaflet.js','MarkerCluster.css','MarkerCluster.Default.css','leaflet.markercluster.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(APP).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
@@ -13,6 +13,7 @@ self.addEventListener('fetch',e=>{
   }
   if(e.request.method!=='GET') return;
   if(u.origin!==location.origin && u.hostname!=='unpkg.com') return;
-  e.respondWith(fetch(e.request).then(r=>{ if(r.ok && (u.origin===location.origin||u.hostname==='unpkg.com')){const cl=r.clone(); caches.open(APP).then(c=>c.put(e.request,cl));} return r;})
+  const req = (e.request.mode==='navigate'||u.pathname.endsWith('/')||u.pathname.endsWith('index.html')) ? new Request(e.request.url,{cache:'no-cache'}) : e.request;
+  e.respondWith(fetch(req).then(r=>{ if(r.ok && (u.origin===location.origin||u.hostname==='unpkg.com')){const cl=r.clone(); caches.open(APP).then(c=>c.put(e.request,cl));} return r;})
     .catch(()=>caches.match(e.request).then(h=>h||caches.match('index.html'))));
 });
