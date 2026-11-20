@@ -128,6 +128,10 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
 .sunb{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.sunb span{background:#fef3c7;border-radius:8px;padding:4px 8px;font-size:13px}
 #dock .atc{color:#7c3aed;font-weight:700;text-decoration:underline}
 .lay label{display:flex;gap:8px;align-items:center;padding:6px 0}
+.banner.meas{background:#7c3aed;color:#fff;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.mres{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:15px;line-height:1.5}
+.mres .big{font-size:22px;font-weight:800;color:#5b21b6}
+.dline{color:#5b21b6;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + var(--safe-b));z-index:2000;background:#14213d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
@@ -141,6 +145,7 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
   <button class="pill atr" id="atrPill" onclick="chooseLayer()" title="Atrações / campings">🎡</button>
   <button class="pill" onclick="openFilters()">⚙️</button>
 </div>
+<div class="banner meas" id="measBanner"><span>📏 Agora toque no destino (camping, atração ou qualquer ponto do mapa)</span><span><button class="pill" onclick="measFromMe()">📍 De mim</button> <button class="pill" onclick="measCancel()">✕</button></span></div>
 <div class="banner" id="favBanner"><span id="bannerTxt">⭐ Mostrando só os favoritos</span><button class="pill" onclick="showAll()">Mostrar tudo</button></div>
 <div class="toast" id="toast"></div>
 <div id="dock"><div class="dh" onclick="toggleDock()"><span class="full">📅 Dias do roteiro</span><span class="short">📅</span><span id="dockArr">◀</span></div><div class="dl" id="dockList"></div></div>
@@ -315,6 +320,7 @@ function row(k,v){ return v?`<div class="row"><div class="k">${k}</div><div>${es
 
 function openPlace(id, fly){
   const p = byId[id]; if(!p) return;
+  if(MEAS && !fly && id!==MEAS.id){ measTo({id, lat:p.lat, lon:p.lon, n:p.n}); return; }
   if(p.at) return openAttr(id, fly);
   if(fly){ openTab('mapa'); map.setView([p.lat,p.lon], Math.max(map.getZoom(),13)); }
   const c = CAT[p.c]||CAT.camp;
@@ -328,12 +334,13 @@ function openPlace(id, fly){
   let dist = me ? `${km(me[0],me[1],p.lat,p.lon).toFixed(1)} km em linha reta` : (p.k!=null?`${p.k} km da rota`:'');
   let h = `<h3>${esc(p.n)}</h3><div class="badges">${b}</div><div class="rows">`+
     row('Preço',p.p)+row('Nota',p.rs&&p.rs[2]?`${p.rs[2]}/5 (${p.rs[3]} avaliações – ${p.rs[0]})`:'')+row('Reserva',p.r)+row('Ligações',p.h)+row('Dump',p.dp)+row('Água',p.ag)+row('Inverno',p.w)+row('Tam. máx.',p.mx)+
-    row('Dias',p.d&&p.d.length?p.d.join(', '):'')+row('Operador',p.op)+row('Endereço',p.ad)+row('Telefone',p.tel)+row('Distância',dist)+`</div>`;
+    row('Dias',p.d&&p.d.length?p.d.join(', '):'')+row('Operador',p.op)+row('Endereço',p.ad)+row('Telefone',p.tel)+row('Distância',dist)+`</div><div class="dline" id="dline"></div>`;
   if(p.o&&p.o.length) h += `<ul class="notes">${p.o.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   if(p.f&&p.f.length) h += `<div class="src">Fontes: ${esc(p.f.join(' · '))}${p.v?' – conferido em '+DATA.ver:''}</div>`;
   const ll = `${p.lat},${p.lon}`;
   const rr = RES.get(p.id);
   if(rr) h += `<div class="rescard"><b>✅ Reservado e pago</b><br>📅 ${resTxt(rr)}${rr.valor?`<br>💲 ${esc(rr.valor)}`:''}${rr.obs?`<br>📝 ${esc(rr.obs)}`:''}${rr.autor?`<br><span class="muted">Registrado por ${esc(rr.autor)}</span>`:''}</div>`;
+  h += measBtns(p);
   h += `<div class="btns"><button class="btn star${FAV.has(p.id)?' on':''}" onclick="toggleFav('${p.id}')">${FAV.has(p.id)?'⭐ Favorito (tirar)':'☆ Favoritar'}</button><button class="btn resb" onclick="resForm('${p.id}')">${rr?'✅ Editar reserva':'💳 Paguei / reservei'}</button></div>`;
   h += `<div class="btns">
     <a class="btn pri" href="https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving" target="_blank" rel="noopener">🧭 Ir com Google Maps</a>
@@ -350,6 +357,7 @@ function openPlace(id, fly){
   document.getElementById('sheetBody').innerHTML = h;
   document.getElementById('sheet').scrollTop=0;
   document.getElementById('sheet').classList.add('show');
+  fillDist(p);
 }
 function showRev(id){
   const p=byId[id]; const [src,url,avg,n]=p.rs||[];
@@ -363,6 +371,7 @@ function fmtD(d){ if(!/^\d{4}-\d{2}/.test(d)) return d; const [y,m,dd]=d.split('
 const dayN = dt=>{ const k=DAYS.findIndex(d=>d.dt===dt); return k<0?'':'D'+DAYS[k].n; };
 function openAttr(id, fly){
   const a=byId[id]; if(!a) return;
+  if(MEAS && !fly && id!==MEAS.id){ measTo({id, lat:a.lat, lon:a.lon, n:a.n}); return; }
   if(fly){ openTab('mapa'); map.setView([a.lat,a.lon], Math.max(map.getZoom(),13)); }
   let b = a.nv==='imp' ? `<span class="b" style="background:#ca8a04">⭐ Imperdível</span>` : `<span class="b" style="background:#64748b">👍 Se der tempo</span>`;
   b += `<span class="b" style="background:#7c3aed">${TIPO[a.tp]||'🎡'} Atração</span>`;
@@ -370,13 +379,14 @@ function openAttr(id, fly){
   if(RES.has(a.id)) b += `<span class="b" style="background:#16a34a">🎟️ Ingresso/reserva paga</span>`;
   const quando = a.dt.map(d=>`${dayN(d)} · ${d}`).join(' ou ');
   let h = `<h3>${esc(a.n)}</h3><div class="badges">${b}</div><p style="margin:4px 0 8px;line-height:1.45">${esc(a.d)}</p><div class="rows">`+
-    row('Quando',quando)+row('Tempo',a.t)+row('Ingresso',a.ing)+`</div>`;
+    row('Quando',quando)+row('Tempo',a.t)+row('Ingresso',a.ing)+`</div><div class="dline" id="dline"></div>`;
   if(a.sun) h += `<div class="sunb">${a.sun.map(x=>`<span>${x.d}: 🌅 ${x.nas} · 🌇 ${x.por}</span>`).join('')}</div><div class="muted">${a.sol==='nascer'?'Melhor no nascer do sol':a.sol==='por'?'Melhor no pôr do sol':'Bom no nascer e no pôr do sol'} – horários locais calculados para as datas da viagem.</div>`;
   if(a.rv&&a.rv!=='—') h += `<div class="atw">🚐 <b>Motorhome/estacionamento:</b> ${esc(a.rv)}</div>`;
   if(a.inv&&a.inv!=='—') h += `<div class="atw">❄️ <b>Inverno/época:</b> ${esc(a.inv)}</div>`;
   if(a.dica) h += `<div class="atv">💬 <b>O que os visitantes dizem:</b> ${esc(a.dica)}<br><span class="muted">Resumo de dicas de viajantes e guias, traduzido – pesquisado em ${DATA.ver}.</span></div>`;
   const rr=RES.get(a.id);
   if(rr) h += `<div class="rescard"><b>🎟️ Comprado / reservado</b><br>📅 ${dBR(rr.checkin)}${rr.valor?`<br>💲 ${esc(rr.valor)}`:''}${rr.obs?`<br>📝 ${esc(rr.obs)}`:''}${rr.autor?`<br><span class="muted">Registrado por ${esc(rr.autor)}</span>`:''}</div>`;
+  h += measBtns(a);
   h += `<div class="btns"><button class="btn star${FAV.has(a.id)?' on':''}" onclick="toggleFav('${a.id}')">${FAV.has(a.id)?'⭐ Favorito (tirar)':'☆ Favoritar'}</button><button class="btn resb" onclick="resForm('${a.id}')">${rr?'🎟️ Editar':'🎟️ Comprei / reservei'}</button></div>`;
   const ll=`${a.lat},${a.lon}`;
   h += `<div class="btns">
@@ -387,6 +397,7 @@ function openAttr(id, fly){
     <a class="btn" href="${gLink('https://www.google.com/search?q='+encodeURIComponent(a.n+' reviews'))}" target="_blank" rel="noopener">🔎 Mais avaliações (Google)</a>
   </div>`;
   document.getElementById('sheetBody').innerHTML=h; document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
+  fillDist(a);
 }
 function atItem(a){ return `<div class="it" onclick="openAttr('${a.id}',true)"><div class="mk at${a.nv==='imp'?' imp':''}">${TIPO[a.tp]||'🎡'}</div><div class="t"><b>${FAV.has(a.id)?'⭐ ':''}${RES.has(a.id)?'🎟️ ':''}${esc(a.n)}</b><span>${a.nv==='imp'?'⭐ Imperdível':'👍 Se der tempo'} · ${esc(a.t)} · ${esc(a.dt.join(', '))}</span></div><div>›</div></div>`; }
 function attrOf(dt){ return AT.filter(a=>a.dt.includes(dt)).sort((x,y)=>(x.nv==='imp'?0:1)-(y.nv==='imp'?0:1)); }
@@ -395,8 +406,96 @@ function dayAttr(k){
   document.getElementById('sheetBody').innerHTML = `<h3>🎡 Atrações – Dia ${d.n} (${d.dt})</h3>${arr.length?arr.map(atItem).join(''):'<p class="muted">Dia de estrada – nenhuma atração marcada para esta data.</p>'}<p class="muted">Toque para ver detalhes, horários do sol, avisos para motorhome e o que os visitantes dizem.</p>`;
   document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
 }
+// ================= distâncias / medir =================
+const RV_F = 1.2;  // motorhome ~20% mais lento que carro
+const measLayer = L.layerGroup().addTo(map);
+let MEAS = null; const RC = {};
+function fmtKm(m){ const k=m/1000; return k<10?k.toFixed(1)+' km':Math.round(k)+' km'; }
+function fmtT(s){ const m=Math.round(s/60); return m<60?m+' min':Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'); }
+async function road(a,b){
+  const k=[a.lat,a.lon,b.lat,b.lon].map(x=>(+x).toFixed(4)).join(',');
+  if(RC[k]) return RC[k];
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),12000);
+  try{
+    const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`,{signal:ctl.signal});
+    const j=await r.json(); if(j.code!=='Ok'||!j.routes||!j.routes.length) throw new Error(j.code||'sem rota');
+    const rt=j.routes[0]; return RC[k]={m:rt.distance, s:rt.duration, g:rt.geometry.coordinates.map(c=>[c[1],c[0]])};
+  } finally { clearTimeout(t); }
+}
+async function roadTable(a, list){
+  const pts=[a].concat(list).map(p=>`${p.lon},${p.lat}`).join(';');
+  const r=await fetch(`https://router.project-osrm.org/table/v1/driving/${pts}?sources=0&annotations=distance,duration`);
+  const j=await r.json(); if(j.code!=='Ok') throw new Error(j.code);
+  return list.map((p,i)=>({p, m:j.distances[0][i+1], s:j.durations[0][i+1]}));
+}
+function measBtns(p){
+  return `<div class="btns"><button class="btn" style="background:#ede9fe;color:#5b21b6" onclick="measStart('${p.id}')">📏 Medir daqui até…</button>`+
+    `<button class="btn" style="background:#ede9fe;color:#5b21b6" onclick="nearestFrom('${p.id}')">${p.at?'🏕️ Campings mais perto':'🎡 Atrações mais perto'}</button></div>`;
+}
+async function fillDist(p){
+  const el=()=>document.getElementById('dline'); if(!me||!el()) return;
+  const lin=km(me[0],me[1],p.lat,p.lon); if(lin>1500) return;
+  el().textContent='📍 Da sua posição: calculando pela estrada…';
+  try{ const r=await road({lat:me[0],lon:me[1]},p); if(el()&&byId[p.id]===p) el().textContent=`📍 Da sua posição: ${fmtKm(r.m)} pela estrada · ~${fmtT(r.s)} de carro (~${fmtT(r.s*RV_F)} de motorhome)`; }
+  catch(e){ if(el()) el().textContent=`📍 Da sua posição: ${lin.toFixed(1)} km em linha reta (sem internet para calcular pela estrada)`; }
+}
+function measStart(id){
+  const p=byId[id]; MEAS={id, lat:p.lat, lon:p.lon, n:p.n}; measLayer.clearLayers();
+  L.circleMarker([p.lat,p.lon],{radius:11,color:'#7c3aed',weight:4,fill:false}).addTo(measLayer);
+  closeSheet(); openTab('mapa'); document.getElementById('measBanner').style.display='flex';
+}
+function measCancel(){ MEAS=null; document.getElementById('measBanner').style.display='none'; }
+function measClear(){ measCancel(); measLayer.clearLayers(); closeSheet(); }
+function myPos(){
+  if(me) return Promise.resolve(me);
+  return new Promise((res,rej)=>{ if(!navigator.geolocation) return rej(new Error('sem GPS'));
+    navigator.geolocation.getCurrentPosition(pos=>{ me=[pos.coords.latitude,pos.coords.longitude]; res(me); }, e=>rej(e), {enableHighAccuracy:true,timeout:15000,maximumAge:60000}); });
+}
+async function measFromMe(){
+  const A=MEAS; if(!A) return;
+  try{ const m=await myPos(); MEAS=null; document.getElementById('measBanner').style.display='none'; measShow({lat:m[0],lon:m[1],n:'Sua posição'}, A); }
+  catch(e){ toast('Não consegui sua localização. Libere a localização para o app.',4000); }
+}
+function measTo(B){ const A=MEAS; MEAS=null; document.getElementById('measBanner').style.display='none'; measShow(A,B); }
+async function measShow(A,B){
+  measLayer.clearLayers();
+  [A,B].forEach((x,i)=>L.circleMarker([x.lat,x.lon],{radius:9,color:'#fff',weight:3,fillColor:i?'#dc2626':'#7c3aed',fillOpacity:1}).addTo(measLayer));
+  const lin=km(A.lat,A.lon,B.lat,B.lon);
+  const gm=`https://www.google.com/maps/dir/?api=1&origin=${A.lat},${A.lon}&destination=${B.lat},${B.lon}&travelmode=driving`;
+  const head=`<h3>📏 Distância</h3><div class="muted">🟣 ${esc(A.n)}<br>🔴 ${esc(B.n)}</div>`;
+  const foot=`<div class="btns"><a class="btn pri" href="${gm}" target="_blank" rel="noopener">🧭 Abrir esse trajeto no Google Maps</a><button class="btn" onclick="measClear()">Limpar medição</button>${A.id?`<button class="btn" onclick="measStart('${A.id}')">📏 Medir de novo a partir de ${esc(A.n.slice(0,18))}</button>`:''}</div>`;
+  const body=document.getElementById('sheetBody');
+  body.innerHTML=head+`<div class="mres">Calculando pela estrada…<br><span class="muted">Linha reta: ${lin.toFixed(1)} km</span></div>`+foot;
+  document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
+  map.fitBounds(L.latLngBounds([[A.lat,A.lon],[B.lat,B.lon]]),{padding:[60,60],maxZoom:14});
+  try{
+    const r=await road(A,B);
+    L.polyline(r.g,{color:'#fff',weight:9,opacity:.9}).addTo(measLayer); L.polyline(r.g,{color:'#7c3aed',weight:5}).addTo(measLayer);
+    map.fitBounds(L.latLngBounds(r.g),{padding:[60,60],maxZoom:14});
+    body.innerHTML=head+`<div class="mres"><span class="big">${fmtKm(r.m)}</span> pela estrada<br>🚗 ~${fmtT(r.s)} de carro · 🚐 ~${fmtT(r.s*RV_F)} de motorhome<br><span class="muted">Linha reta: ${lin.toFixed(1)} km. O cálculo não sabe de estradas fechadas por neve ou obras – confira no Google Maps.</span></div>`+foot;
+  }catch(e){
+    L.polyline([[A.lat,A.lon],[B.lat,B.lon]],{color:'#7c3aed',weight:4,dashArray:'6 8'}).addTo(measLayer);
+    body.innerHTML=head+`<div class="mres"><span class="big">${lin.toFixed(1)} km</span> em linha reta<br><span class="muted">Sem internet (ou serviço de rotas fora do ar) para calcular pela estrada. Pela estrada costuma dar 20–40% a mais.</span></div>`+foot;
+  }
+}
+async function nearestFrom(id){
+  const p=byId[id]; if(!p) return;
+  const pool = p.at ? allPlaces().filter(x=>x.c!=='dump' && (visible(x)||F.lay==='atr') && (x.c!=='park'||x.st!=='nao')) : AT;
+  const cand = pool.filter(x=>x.id!==id).map(x=>[km(p.lat,p.lon,x.lat,x.lon),x]).sort((a,b)=>a[0]-b[0]).slice(0,12).map(x=>x[1]);
+  const title = p.at ? `🏕️ Lugares para dormir mais perto de ${esc(p.n)}` : `🎡 Atrações mais perto de ${esc(p.n)}`;
+  const body=document.getElementById('sheetBody');
+  const line=(x,t)=>(x.at?atItem(x):itemHTML(x)).replace('<div>›</div>',`<div class="muted" style="text-align:right;font-size:12px">${t}</div>`);
+  body.innerHTML=`<h3>${title}</h3><div class="muted">Calculando distâncias pela estrada…</div>`+cand.map(x=>line(x,km(p.lat,p.lon,x.lat,x.lon).toFixed(1)+' km<br>linha reta')).join('')+`<div class="btns"><button class="btn" onclick="openPlace('${id}')">← Voltar</button></div>`;
+  document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
+  try{
+    const r=(await roadTable(p,cand)).filter(x=>x.m!=null).sort((a,b)=>a.m-b.m);
+    if(byId[id]!==p) return;
+    body.innerHTML=`<h3>${title}</h3><div class="muted">Ordenado pela distância de estrada (🚐 tempo estimado de motorhome). ${p.at?'Segue os filtros da ⚙️ (sem dump e sem estacionamentos que proíbem).':''}</div>`+
+      r.map(x=>line(x.p,`<b>${fmtKm(x.m)}</b><br>🚐 ${fmtT(x.s*RV_F)}`)).join('')+`<div class="btns"><button class="btn" onclick="openPlace('${id}')">← Voltar</button></div>`;
+  }catch(e){ const m=body.querySelector('.muted'); if(m) m.textContent='Sem internet para calcular pela estrada – mostrando distância em linha reta.'; }
+}
 function closeSheet(){ document.getElementById('sheet').classList.remove('show'); }
-map.on('click', closeSheet);
+map.on('click', e=>{ if(MEAS){ measTo({lat:e.latlng.lat, lon:e.latlng.lng, n:'ponto escolhido no mapa'}); return; } closeSheet(); });
 
 function showStop(i){
   const s = DATA.stops[i];
