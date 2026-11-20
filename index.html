@@ -115,6 +115,11 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
 #dock.min .dh{justify-content:center;gap:2px;padding:8px 2px}
 #dock .short{display:none}
 #dock.min .short{display:inline}
+.mk .rs{position:absolute;left:-7px;top:-8px;font-size:12px}
+.pill.res.on{background:#16a34a;color:#fff}
+.rescard{background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:14px;line-height:1.4}
+.btn.resb{background:#dcfce7;color:#14532d}
+#dock .rsv{color:#15803d;font-weight:700}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + var(--safe-b));z-index:2000;background:#14213d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
@@ -124,9 +129,10 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
   <button class="pill" id="dayPill" onclick="openTab('roteiro')">🗓️ Roteiro</button>
   <button class="pill" onclick="openSearch()" title="Buscar na internet">🔍</button>
   <button class="pill fav" id="favPill" onclick="toggleFavMode()" title="Só favoritos">⭐ <span id="favN">0</span></button>
+  <button class="pill res" id="resPill" onclick="toggleResMode()" title="Reservas pagas">✅ <span id="resN">0</span></button>
   <button class="pill" onclick="openFilters()">⚙️</button>
 </div>
-<div class="banner" id="favBanner"><span>⭐ Mostrando só os favoritos</span><button class="pill" onclick="toggleFavMode()">Mostrar tudo</button></div>
+<div class="banner" id="favBanner"><span id="bannerTxt">⭐ Mostrando só os favoritos</span><button class="pill" onclick="showAll()">Mostrar tudo</button></div>
 <div class="toast" id="toast"></div>
 <div id="dock"><div class="dh" onclick="toggleDock()"><span class="full">📅 Dias do roteiro</span><span class="short">📅</span><span id="dockArr">◀</span></div><div class="dl" id="dockList"></div></div>
 <div id="fabs">
@@ -177,13 +183,15 @@ const SUB = {walmart:'Walmart',casino:'Cassino',truck:'Truck stop',rest:'Rest ar
 const ST = {ok:['🟢 Pernoite liberado (relatos)','var(--ok)'],inc:['🟡 Incerto – confirme','var(--inc)'],nao:['🔴 Não permite','var(--nao)']};
 const TRIP_YEAR = d => { const [dd,mm]=d.split('/').map(Number); return new Date(mm===12?2026:2027, mm-1, dd); };
 const store = { get(k,d){ try{const v=localStorage.getItem('rotaeua_'+k); return v?JSON.parse(v):d;}catch(e){return d;} }, set(k,v){ try{localStorage.setItem('rotaeua_'+k,JSON.stringify(v));}catch(e){} } };
-let F = Object.assign({rv:true,pub:true,free:true,park:true,dump:true,camp:false,onlyV:false,hideNao:false,gal:true,onlyFav:false}, store.get('filters', {}));
+let F = Object.assign({rv:true,pub:true,free:true,park:true,dump:true,camp:false,onlyV:false,hideNao:false,gal:true,onlyFav:false,onlyRes:false}, store.get('filters', {}));
 // ---- planilha compartilhada (Google Apps Script) ----
 const API = 'https://script.google.com/macros/s/AKfycbyyM4Y8Nbw4AFiN39kVRNVnhrOaRTixLjDgQL5pw_r6AC3-2ST9gt_T-2VaCnOAv0j7Lw/exec';
 let GAL = store.get('galera', []);          // pontos adicionados pela galera (cache offline)
 let FAVL = store.get('favs', []);           // favoritos [{place_id,nome,autor,...}]
 let FAV = new Set(FAVL.map(f=>f.place_id));
 let QUEUE = store.get('queue', []);         // ações feitas sem internet
+let RESL = store.get('res', []);            // reservas pagas [{place_id,nome,checkin,checkout,valor,obs}]
+let RES = new Map(RESL.map(r=>[r.place_id,r]));
 let me = null, follow = false, watchId = null, meMarker = null, nearCat = 'all';
 
 const map = L.map('map',{zoomControl:false, preferCanvas:true}).setView([36.2,-115.5],6);
@@ -225,7 +233,7 @@ function icon(p){
   const dot = p.st ? `<span class="dot" style="background:${ST[p.st][1]}"></span>` : '';
   const txt = p.c==='park' ? ({walmart:'W',casino:'🎰',truck:'⛽',rest:'R',cracker:'CB',outdoor:'P'}[p.s]||'P') : c.i;
   const gb = p.gl ? '<span class="gb">👥</span>' : '';
-  const fs = FAV.has(p.id) ? '<span class="fs">⭐</span>' : '';
+  const fs = (FAV.has(p.id) ? '<span class="fs">⭐</span>' : '') + (RES.has(p.id) ? '<span class="rs">✅</span>' : '');
   return L.divIcon({className:'',html:`<div class="mk${p.v?' v':''}${p.gl?' g':''}" style="background:${c.hex};position:relative">${txt}${dot}${gb}${fs}</div>`,iconSize:p.v?[34,34]:[28,28],iconAnchor:p.v?[17,17]:[14,14]});
 }
 const cluster = L.markerClusterGroup({maxClusterRadius:40,disableClusteringAtZoom:11,showCoverageOnHover:false,chunkedLoading:true});
@@ -233,6 +241,7 @@ const vLayer = L.markerClusterGroup({maxClusterRadius:28,disableClusteringAtZoom
 map.addLayer(cluster); map.addLayer(vLayer);
 const markers = {};
 function visible(p){
+  if(F.onlyRes) return RES.has(p.id);
   if(F.onlyFav) return FAV.has(p.id);
   if(p.gl) return F.gal;
   if(!F[p.c]) return false;
@@ -245,14 +254,17 @@ function draw(){
   const arr=[];
   allPlaces().forEach(p=>{
     if(!visible(p)) return;
-    const key = p.id+(FAV.has(p.id)?'*':'');
+    const key = p.id+(FAV.has(p.id)?'*':'')+(RES.has(p.id)?'$':'');
     let m = markers[p.id];
     if(!m || m._k!==key){ m = L.marker([p.lat,p.lon],{icon:icon(p),zIndexOffset:p.v||p.gl?1000:0}); m._k=key; m.on('click',()=>openPlace(p.id)); markers[p.id]=m; }
-    if(p.v||p.gl||F.onlyFav) vLayer.addLayer(m); else arr.push(m);
+    if(p.v||p.gl||F.onlyFav||F.onlyRes) vLayer.addLayer(m); else arr.push(m);
   });
   document.getElementById('favN').textContent = FAV.size;
   document.getElementById('favPill').classList.toggle('on',F.onlyFav);
-  document.getElementById('favBanner').classList.toggle('show',F.onlyFav); document.body.classList.toggle('favon',F.onlyFav);
+  document.getElementById('resN').textContent = RES.size;
+  document.getElementById('resPill').classList.toggle('on',F.onlyRes);
+  document.getElementById('bannerTxt').textContent = F.onlyRes ? '✅ Mostrando só as reservas pagas' : '⭐ Mostrando só os favoritos';
+  document.getElementById('favBanner').classList.toggle('show',F.onlyFav||F.onlyRes); document.body.classList.toggle('favon',F.onlyFav||F.onlyRes);
   cluster.addLayers(arr);
 }
 const byId = {}; DATA.places.forEach(p=>byId[p.id]=p);
@@ -278,6 +290,7 @@ function openPlace(id, fly){
   if(p.st) b += `<span class="b" style="background:${ST[p.st][1]}">${ST[p.st][0]}</span>`;
   if(p.gl) b += `<span class="b" style="background:#dc2626">👥 Adicionado pela galera${p.autor?' · '+esc(p.autor):''}${p.quando?' · '+fmtD(p.quando):''}</span>`;
   if(FAV.has(p.id)) b += `<span class="b" style="background:#facc15;color:#422006">⭐ Favorito</span>`;
+  if(RES.has(p.id)) b += `<span class="b" style="background:#16a34a">✅ Reservado e pago</span>`;
   if(p.gl) {} else if(p.v) b += `<span class="b" style="background:#a16207">⭐ Pesquisado</span>`; else if(p.dy) b+=`<span class="b lt">Dados do The Dyrt (nov/2026)</span>`; else b+=`<span class="b lt">Dados do mapa (não conferido)</span>`;
   if(p.p) b += `<span class="b lt">💲 ${esc(p.p)}</span>`;
   let dist = me ? `${km(me[0],me[1],p.lat,p.lon).toFixed(1)} km em linha reta` : (p.k!=null?`${p.k} km da rota`:'');
@@ -287,7 +300,9 @@ function openPlace(id, fly){
   if(p.o&&p.o.length) h += `<ul class="notes">${p.o.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   if(p.f&&p.f.length) h += `<div class="src">Fontes: ${esc(p.f.join(' · '))}${p.v?' – conferido em '+DATA.ver:''}</div>`;
   const ll = `${p.lat},${p.lon}`;
-  h += `<div class="btns"><button class="btn star${FAV.has(p.id)?' on':''}" style="grid-column:1/-1" onclick="toggleFav('${p.id}')">${FAV.has(p.id)?'⭐ Favorito (tocar para tirar)':'☆ Adicionar aos favoritos'}</button></div>`;
+  const rr = RES.get(p.id);
+  if(rr) h += `<div class="rescard"><b>✅ Reservado e pago</b><br>📅 ${resTxt(rr)}${rr.valor?`<br>💲 ${esc(rr.valor)}`:''}${rr.obs?`<br>📝 ${esc(rr.obs)}`:''}${rr.autor?`<br><span class="muted">Registrado por ${esc(rr.autor)}</span>`:''}</div>`;
+  h += `<div class="btns"><button class="btn star${FAV.has(p.id)?' on':''}" onclick="toggleFav('${p.id}')">${FAV.has(p.id)?'⭐ Favorito (tirar)':'☆ Favoritar'}</button><button class="btn resb" onclick="resForm('${p.id}')">${rr?'✅ Editar reserva':'💳 Paguei / reservei'}</button></div>`;
   h += `<div class="btns">
     <a class="btn pri" href="https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving" target="_blank" rel="noopener">🧭 Ir com Google Maps</a>
     <a class="btn" href="https://maps.apple.com/?daddr=${ll}&dirflg=d" target="_blank" rel="noopener">Apple Maps</a>
@@ -396,6 +411,7 @@ function renderFilt(){
   const items = Object.entries(CAT).map(([k,c])=>`<label><input type="checkbox" ${F[k]?'checked':''} onchange="F['${k}']=this.checked;saveF()"><span class="mk" style="background:${c.hex}">${c.i}</span><span>${c.n} <span class="muted">(${DATA.places.filter(p=>p.c===k).length})</span>${k==='park'?'<br><span class="muted">W Walmart · 🎰 Cassino · ⛽ Truck stop · R Rest area · CB Cracker Barrel</span>':''}</span></label>`).join('');
   document.getElementById('filtList').innerHTML = items +
    `<label><input type="checkbox" ${F.gal?'checked':''} onchange="F.gal=this.checked;saveF()"><span class="mk g" style="background:#64748b;position:relative">👥</span><span>Pontos adicionados pela galera <span class="muted">(${GALP.length})</span></span></label>`+
+   `<label><input type="checkbox" ${F.onlyRes?'checked':''} onchange="if(this.checked&&!RES.size){this.checked=false;toast('Nenhuma reserva ainda.');return;} F.onlyRes=this.checked; if(this.checked)F.onlyFav=false; saveF();renderFilt()">✅ Só reservas pagas (${RES.size})</label>`+
    `<label><input type="checkbox" ${F.onlyFav?'checked':''} onchange="if(this.checked&&!FAV.size){this.checked=false;toast('Você ainda não tem favoritos. Abra um lugar no mapa e toque em ☆ Adicionar aos favoritos.',4500);return;} F.onlyFav=this.checked;saveF()">⭐ Só favoritos (${FAV.size})${F.onlyFav?' <span class=\'muted\'>– ligado: o mapa mostra só os favoritos</span>':''}</label>`+
    `<label><input type="checkbox" ${F.onlyV?'checked':''} onchange="F.onlyV=this.checked;saveF()">⭐ Só locais pesquisados</label>`+
    `<label><input type="checkbox" ${F.hideNao?'checked':''} onchange="F.hideNao=this.checked;saveF()">Esconder estacionamentos que proíbem</label>`;
@@ -476,11 +492,13 @@ async function sync(){
     await flushQueue();
     const r = await fetch(API+'?t='+Date.now()); const j = await r.json();
     if(!j.ok) return;
-    GAL = j.pontos||[]; FAVL = j.favoritos||[];
+    GAL = j.pontos||[]; FAVL = j.favoritos||[]; RESL = j.reservas||[];
     // ações ainda na fila continuam valendo localmente
-    QUEUE.forEach(b=>{ if(b.action==='fav') FAVL.push({place_id:b.id,nome:b.nome,autor:b.autor}); if(b.action==='unfav') FAVL=FAVL.filter(f=>f.place_id!==b.id); if(b.action==='add') GAL.push(Object.assign({id:b.tmp,criado_em:new Date().toISOString()},b)); if(b.action==='remove') GAL=GAL.filter(g=>g.id!==b.id); });
-    store.set('galera',GAL); store.set('favs',FAVL);
-    FAV = new Set(FAVL.map(f=>f.place_id)); if(F.onlyFav && !FAV.size){ F.onlyFav=false; store.set('filters',F); } rebuildGal(); draw(); renderFilt();
+    QUEUE.forEach(b=>{ if(b.action==='fav') FAVL.push({place_id:b.id,nome:b.nome,autor:b.autor}); if(b.action==='unfav') FAVL=FAVL.filter(f=>f.place_id!==b.id); if(b.action==='add') GAL.push(Object.assign({id:b.tmp,criado_em:new Date().toISOString()},b)); if(b.action==='remove') GAL=GAL.filter(g=>g.id!==b.id); if(b.action==='res'){ RESL=RESL.filter(r=>r.place_id!==b.id); RESL.push({place_id:b.id,nome:b.nome,checkin:b.checkin,checkout:b.checkout,valor:b.valor,obs:b.obs,autor:b.autor}); } if(b.action==='unres') RESL=RESL.filter(r=>r.place_id!==b.id); });
+    store.set('galera',GAL); store.set('favs',FAVL); store.set('res',RESL);
+    FAV = new Set(FAVL.map(f=>f.place_id)); RES = new Map(RESL.map(r=>[r.place_id,r]));
+    if(F.onlyFav && !FAV.size){ F.onlyFav=false; store.set('filters',F); } if(F.onlyRes && !RES.size){ F.onlyRes=false; store.set('filters',F); }
+    rebuildGal(); draw(); renderFilt(); if(typeof renderDock==='function') renderDock();
   }catch(e){}
 }
 async function toggleFav(id){
@@ -494,7 +512,7 @@ async function toggleFav(id){
 }
 function toggleFavMode(){
   if(!F.onlyFav && !FAV.size){ toast('Nenhum favorito ainda. Abra um lugar e toque em ☆ Adicionar aos favoritos.',4000); return; }
-  F.onlyFav = !F.onlyFav; saveF(); renderFilt();
+  F.onlyFav = !F.onlyFav; if(F.onlyFav) F.onlyRes=false; saveF(); renderFilt();
   if(F.onlyFav){ const pts=allPlaces().filter(p=>FAV.has(p.id)); if(pts.length) map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[40,40],maxZoom:12}); }
   openTab('mapa');
 }
@@ -582,6 +600,59 @@ setInterval(()=>{ if(document.visibilityState==='visible') sync(); }, 120000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') sync(); });
 
 
+
+// ================= reservas pagas =================
+const DMIN='2026-12-14', DMAX='2027-01-13';
+function dBR(iso){ if(!iso) return '?'; const [y,m,d]=String(iso).slice(0,10).split('-'); return `${d}/${m}`; }
+function nights(r){ const a=new Date(r.checkin+'T12:00'), b=new Date(r.checkout+'T12:00'); return Math.round((b-a)/864e5); }
+function resTxt(r){ const n=nights(r); return `${dBR(r.checkin)} → ${dBR(r.checkout)}${n>0?` (${n} noite${n>1?'s':''})`:''}`; }
+function isoFromBR(dm){ const [d,m]=dm.split('/').map(Number); return `${m===12?2026:2027}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+function nextISO(iso){ const t=new Date(iso+'T12:00'); t.setDate(t.getDate()+1); return t.toISOString().slice(0,10); }
+function resForm(id){
+  const p=byId[id]; if(!p) return; const r=RES.get(id);
+  const ci = r ? r.checkin : (p.d&&p.d.length ? isoFromBR(p.d[0]) : '');
+  const co = r ? r.checkout : (ci ? nextISO(ci) : '');
+  document.getElementById('sheetBody').innerHTML = `<h3>💳 Reserva paga</h3><div class="muted">${esc(p.n)}</div><div class="frm">
+    <label>Entrada (check-in)</label><input type="date" id="rCi" min="${DMIN}" max="${DMAX}" value="${ci}" onchange="if(!document.getElementById('rCo').value||document.getElementById('rCo').value<=this.value) document.getElementById('rCo').value=nextISO(this.value)">
+    <label>Saída (check-out)</label><input type="date" id="rCo" min="${DMIN}" max="${DMAX}" value="${co}">
+    <label>Valor pago</label><input id="rV" value="${esc(r?r.valor:'')}" placeholder="Ex.: US$ 120 (2 noites)">
+    <label>Nº da reserva / observação</label><input id="rO" value="${esc(r?r.obs:'')}" placeholder="Ex.: conf. ABC123, vaga 14">
+  </div><div class="btns"><button class="btn" onclick="openPlace('${id}')">Cancelar</button><button class="btn pri" style="grid-column:auto" onclick="saveRes('${id}')">Salvar reserva</button>
+  ${r?`<button class="btn red" style="grid-column:1/-1" onclick="delRes('${id}')">🗑️ Remover esta reserva</button>`:''}</div>`;
+  document.getElementById('sheet').scrollTop=0;
+}
+async function saveRes(id){
+  const p=byId[id]; const ci=document.getElementById('rCi').value, co=document.getElementById('rCo').value;
+  if(!ci||!co){ toast('Preencha a entrada e a saída.'); return; }
+  if(co<=ci){ toast('A saída tem que ser depois da entrada.'); return; }
+  const keep={v:document.getElementById('rV').value.trim(), o:document.getElementById('rO').value.trim()};
+  const idn = await needId(); if(!idn){ openPlace(id); return; }
+  const body={action:'res', id, nome:p.n, ll:p.lat+','+p.lon, checkin:ci, checkout:co, valor:keep.v, obs:keep.o, autor:idn.autor, code:idn.code};
+  try{ await send(body); const rr={place_id:id,nome:p.n,checkin:ci,checkout:co,valor:keep.v,obs:keep.o,autor:idn.autor};
+    RESL=RESL.filter(r=>r.place_id!==id); RESL.push(rr); RES.set(id,rr); store.set('res',RESL); draw(); renderDock(); openPlace(id); toast('✅ Reserva salva para a galera'); }
+  catch(e){ openPlace(id); }
+}
+async function delRes(id){
+  if(!confirm('Remover a reserva deste lugar?')) return;
+  const idn = await needId(); if(!idn) return;
+  try{ await send({action:'unres', id, autor:idn.autor, code:idn.code}); RESL=RESL.filter(r=>r.place_id!==id); RES.delete(id); store.set('res',RESL);
+    if(F.onlyRes && !RES.size){ F.onlyRes=false; saveF(); } draw(); renderDock(); openPlace(id); toast('Reserva removida.'); }catch(e){}
+}
+function resList(){
+  const arr=[...RES.values()].sort((a,b)=>String(a.checkin).localeCompare(String(b.checkin)));
+  document.getElementById('sheetBody').innerHTML = `<h3>✅ Reservas pagas (${arr.length})</h3>` + arr.map(r=>{
+    const p=byId[r.place_id]; return `<div class="it" onclick="${p?`openPlace('${r.place_id}',true)`:''}"><div class="mk" style="background:#16a34a">✅</div><div class="t"><b>${esc(p?p.n:r.nome)}</b><span>📅 ${resTxt(r)}${r.valor?' · '+esc(r.valor):''}</span></div><div>›</div></div>`; }).join('') +
+    `<p class="muted">Toque numa reserva para ver no mapa.</p>`;
+  document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
+}
+function toggleResMode(){
+  if(!F.onlyRes && !RES.size){ toast('Nenhuma reserva ainda. Abra o camping no mapa e toque em 💳 Paguei / reservei.',4500); return; }
+  F.onlyRes=!F.onlyRes; if(F.onlyRes) F.onlyFav=false; saveF(); renderFilt(); openTab('mapa');
+  if(F.onlyRes){ const pts=allPlaces().filter(p=>RES.has(p.id)); if(pts.length) map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[50,50],maxZoom:12}); resList(); }
+}
+function showAll(){ F.onlyFav=false; F.onlyRes=false; saveF(); renderFilt(); }
+function resForNight(dt){ const iso=isoFromBR(dt); return [...RES.values()].filter(r=>r.checkin<=iso && iso<r.checkout); }
+
 // ================= painel de dias =================
 const DAYS = (()=>{ const byD={}; DATA.stops.forEach((s,i)=>{ (byD[s.data]=byD[s.data]||[]).push(i); });
   const out=[]; let lastNight=0;
@@ -603,7 +674,9 @@ function renderDock(){
     const st=DATA.stops;
     const txt = d.free ? `Livre em ${esc(shortN(st[d.to].n))}` : (k===0 ? esc(d.idx.map(i=>shortN(st[i].n)).join(' → ')) : `${esc(shortN(st[d.from].n))} → ${esc(shortN(st[d.to].n))}`);
     const nn = !d.free && d.night!=null ? (DAYS[k+1]&&DAYS[k+1].free?' · 🌙2n':' · 🌙') : '';
-    return `<div class="di${d.free?' free':''}${dockOn===k?' on':''}${d.dt===td?' td':''}" id="dk${k}" onclick="goDay(${k})"><b><span class="full">D${d.n} · ${d.dt}${nn}</span><span class="short">${d.n}</span></b><small>${txt}</small></div>`;
+    const rs = resForNight(d.dt);
+    const rsTxt = rs.length ? `<small class="rsv">✅ ${esc(rs.map(r=>(byId[r.place_id]||{n:r.nome}).n).join(', '))}</small>` : '';
+    return `<div class="di${d.free?' free':''}${dockOn===k?' on':''}${d.dt===td?' td':''}" id="dk${k}" onclick="goDay(${k})"><b><span class="full">D${d.n} · ${d.dt}${nn}${rs.length?' ✅':''}</span><span class="short">${d.n}${rs.length?'✅':''}</span></b><small>${txt}</small>${rsTxt}</div>`;
   }).join('');
 }
 function goDay(k){
