@@ -351,7 +351,7 @@ function openPlace(id, fly){
   let dist = me ? `${km(me[0],me[1],p.lat,p.lon).toFixed(1)} km em linha reta` : (p.k!=null?`${p.k} km da rota`:'');
   let h = `<h3>${esc(p.n)}</h3><div class="badges">${b}</div><div class="rows">`+
     row('Preço',p.p)+row('Nota',p.rs&&p.rs[2]?`${p.rs[2]}/5 (${p.rs[3]} avaliações – ${p.rs[0]})`:'')+row('Reserva',p.r)+row('Ligações',p.h)+row('Dump',p.dp)+row('Água',p.ag)+row('Inverno',p.w)+row('Tam. máx.',p.mx)+
-    row('Dias',p.d&&p.d.length?p.d.join(', '):'')+row('Operador',p.op)+row('Endereço',p.ad)+row('Telefone',p.tel)+row('Distância',dist)+`</div><div class="dline" id="dline"></div>`;
+    row('Dias',p.d&&p.d.length?p.d.join(', '):'')+row('Operador',p.op)+row('Endereço',p.ad)+row('Telefone',p.tel)+row('Distância',dist)+`</div><div class="dline" id="dline"></div><div class="dline" id="wxline"></div>`;
   if(p.o&&p.o.length) h += `<ul class="notes">${p.o.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   if(p.f&&p.f.length) h += `<div class="src">Fontes: ${esc(p.f.join(' · '))}${p.v?' – conferido em '+DATA.ver:''}</div>`;
   const ll = `${p.lat},${p.lon}`;
@@ -374,7 +374,7 @@ function openPlace(id, fly){
   document.getElementById('sheetBody').innerHTML = h;
   document.getElementById('sheet').scrollTop=0;
   document.getElementById('sheet').classList.add('show');
-  fillDist(p);
+  fillDist(p); fillWx(p);
 }
 function showRev(id){
   const p=byId[id]; const [src,url,avg,n]=p.rs||[];
@@ -396,7 +396,7 @@ function openAttr(id, fly){
   if(RES.has(a.id)) b += `<span class="b" style="background:#16a34a">🎟️ Ingresso/reserva paga</span>`;
   const quando = a.dt.map(d=>`${dayN(d)} · ${d}`).join(' ou ');
   let h = `<h3>${esc(a.n)}</h3><div class="badges">${b}</div><p style="margin:4px 0 8px;line-height:1.45">${esc(a.d)}</p><div class="rows">`+
-    row('Quando',quando)+row('Tempo',a.t)+row('Ingresso',a.ing)+`</div><div class="dline" id="dline"></div>`;
+    row('Quando',quando)+row('Tempo',a.t)+row('Ingresso',a.ing)+`</div><div class="dline" id="dline"></div><div class="dline" id="wxline"></div>`;
   if(a.sun) h += `<div class="sunb">${a.sun.map(x=>`<span>${x.d}: 🌅 ${x.nas} · 🌇 ${x.por}</span>`).join('')}</div><div class="muted">${a.sol==='nascer'?'Melhor no nascer do sol':a.sol==='por'?'Melhor no pôr do sol':'Bom no nascer e no pôr do sol'} – horários locais calculados para as datas da viagem.</div>`;
   if(a.rv&&a.rv!=='—') h += `<div class="atw">🚐 <b>Motorhome/estacionamento:</b> ${esc(a.rv)}</div>`;
   if(a.inv&&a.inv!=='—') h += `<div class="atw">❄️ <b>Inverno/época:</b> ${esc(a.inv)}</div>`;
@@ -414,7 +414,7 @@ function openAttr(id, fly){
     <a class="btn" href="${gLink('https://www.google.com/search?q='+encodeURIComponent(a.n+' reviews'))}" target="_blank" rel="noopener">🔎 Mais avaliações (Google)</a>
   </div>`;
   document.getElementById('sheetBody').innerHTML=h; document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
-  fillDist(a);
+  fillDist(a); fillWx(a);
 }
 function atItem(a){ return `<div class="it" onclick="openAttr('${a.id}',true)"><div class="mk at${a.nv==='imp'?' imp':''}">${TIPO[a.tp]||'🎡'}</div><div class="t"><b>${FAV.has(a.id)?'⭐ ':''}${RES.has(a.id)?'🎟️ ':''}${esc(a.n)}</b><span>${a.nv==='imp'?'⭐ Imperdível':'👍 Se der tempo'} · ${esc(a.t)} · ${esc(a.dt.join(', '))}</span></div><div>›</div></div>`; }
 function attrOf(dt){ return AT.filter(a=>a.dt.includes(dt)).sort((x,y)=>(x.nv==='imp'?0:1)-(y.nv==='imp'?0:1)); }
@@ -447,7 +447,8 @@ async function roadTable(a, list){
 }
 function measBtns(p){
   return `<div class="btns"><button class="btn" style="background:#ede9fe;color:#5b21b6" onclick="measStart('${p.id}')">📏 Medir daqui até…</button>`+
-    `<button class="btn" style="background:#ede9fe;color:#5b21b6" onclick="nearestFrom('${p.id}')">${p.at?'🏕️ Campings mais perto':'🎡 Atrações mais perto'}</button></div>`;
+    `<button class="btn" style="background:#ede9fe;color:#5b21b6" onclick="nearestFrom('${p.id}')">${p.at?'🏕️ Campings mais perto':'🎡 Atrações mais perto'}</button>`+
+    `<button class="btn" style="background:#e0f2fe;color:#075985;grid-column:1/-1" onclick="wxPlaceOpen('${p.id}')">⛅ Previsão deste lugar (agora e 7 dias)</button></div>`;
 }
 async function fillDist(p){
   const el=()=>document.getElementById('dline'); if(!me||!el()) return;
@@ -855,21 +856,32 @@ function resCount(){ let n=0; RES.forEach((r,k)=>{ if(!isNM(k)) n++; }); return 
 const WMO={0:['☀️','Céu limpo'],1:['🌤️','Quase limpo'],2:['⛅','Parcialmente nublado'],3:['☁️','Nublado'],45:['🌫️','Neblina'],48:['🌫️','Neblina com geada'],51:['🌦️','Garoa fraca'],53:['🌦️','Garoa'],55:['🌧️','Garoa forte'],56:['🌧️','Garoa congelante'],57:['🌧️','Garoa congelante'],61:['🌧️','Chuva fraca'],63:['🌧️','Chuva'],65:['🌧️','Chuva forte'],66:['🌨️','Chuva congelante'],67:['🌨️','Chuva congelante'],71:['🌨️','Neve fraca'],73:['❄️','Neve'],75:['❄️','Neve forte'],77:['🌨️','Grãos de neve'],80:['🌦️','Pancadas de chuva'],81:['🌧️','Pancadas de chuva'],82:['⛈️','Pancadas fortes'],85:['🌨️','Pancadas de neve'],86:['❄️','Pancadas de neve forte'],95:['⛈️','Trovoada'],96:['⛈️','Trovoada com granizo'],99:['⛈️','Trovoada com granizo']};
 const wI=(c,day)=>{ const w=WMO[c]||['🌡️','—']; return (day===0&&(c===0||c===1))?['🌙',w[1]]:w; };
 const NWSPT={'Winter Storm Warning':'Alerta de tempestade de inverno','Winter Storm Watch':'Possível tempestade de inverno','Winter Weather Advisory':'Aviso de neve/gelo','Blizzard Warning':'Alerta de nevasca','Wind Advisory':'Aviso de vento forte','High Wind Warning':'Alerta de vento muito forte','High Wind Watch':'Possível vento muito forte','Freeze Warning':'Alerta de congelamento','Hard Freeze Warning':'Alerta de congelamento forte','Frost Advisory':'Aviso de geada','Flood Warning':'Alerta de enchente','Flash Flood Warning':'Alerta de enxurrada','Flood Watch':'Possível enchente','Flash Flood Watch':'Possível enxurrada','Dense Fog Advisory':'Aviso de neblina densa','Red Flag Warning':'Alerta de risco de incêndio','Extreme Cold Warning':'Alerta de frio extremo','Cold Weather Advisory':'Aviso de frio','Dust Storm Warning':'Alerta de tempestade de poeira','Blowing Dust Advisory':'Aviso de poeira','High Surf Advisory':'Aviso de ondas altas','Beach Hazards Statement':'Aviso de perigo na praia','Coastal Flood Advisory':'Aviso de maré alta','Avalanche Warning':'Alerta de avalanche','Ice Storm Warning':'Alerta de chuva congelante'};
-let WX = store.get('wx', null), wxTab='agora', wxBusy=false;
+window.WXG=()=>WX;
+let WX = store.get('wx', null), wxTab='agora', wxBusy=false, WXP=null;
 function wxPoint(){
   if(me) return {lat:me[0],lon:me[1],n:'sua posição'};
   const k=DAYS.findIndex(d=>d.dt===todayStr()); if(k>=0){ const s=DATA.stops[DAYS[k].night!=null?DAYS[k].night:DAYS[k].to]; return {lat:s.lat,lon:s.lon,n:shortN(s.n)}; }
   const c=map.getCenter(); return {lat:c.lat,lon:c.lng,n:'centro do mapa'};
 }
 async function jget(u,ms){ const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),ms||15000); try{ const r=await fetch(u,{signal:ctl.signal}); if(!r.ok) throw new Error(r.status); return await r.json(); } finally{ clearTimeout(t); } }
+async function wxFetch(P){
+  const f=await jget(`https://api.open-meteo.com/v1/forecast?latitude=${P.lat.toFixed(3)}&longitude=${P.lon.toFixed(3)}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,precipitation_probability,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,snowfall_sum,wind_speed_10m_max,sunrise,sunset&timezone=auto&forecast_days=7&wind_speed_unit=kmh`);
+  let al=[]; try{ const a=await jget(`https://api.weather.gov/alerts/active?point=${P.lat.toFixed(4)},${P.lon.toFixed(4)}`,8000); al=(a.features||[]).map(x=>({ev:x.properties.event, h:x.properties.headline, ate:x.properties.ends||x.properties.expires})); }catch(e){}
+  return {t:Date.now(),lat:P.lat,lon:P.lon,n:P.n,f,al};
+}
+async function wxPlaceOpen(id){
+  const p=byId[id]; if(!p) return; closeSheet();
+  WXP={t:0,lat:p.lat,lon:p.lon,n:p.n,f:null,al:[],loading:1}; wxTab='agora';
+  document.getElementById('wx').classList.add('show'); renderWx();
+  try{ WXP=await wxFetch({lat:p.lat,lon:p.lon,n:p.n}); }catch(e){ WXP.loading=0; WXP.err=1; }
+  if(WXP && document.getElementById('wx').classList.contains('show')) renderWx();
+}
 async function wxLoad(force){
   const P=wxPoint();
   if(!force && WX && Date.now()-WX.t<20*60e3 && km(WX.lat,WX.lon,P.lat,P.lon)<25) return WX;
   if(wxBusy) return WX; wxBusy=true;
   try{
-    const f=await jget(`https://api.open-meteo.com/v1/forecast?latitude=${P.lat.toFixed(3)}&longitude=${P.lon.toFixed(3)}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,precipitation_probability,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,snowfall_sum,wind_speed_10m_max,sunrise,sunset&timezone=auto&forecast_days=7&wind_speed_unit=kmh`);
-    let al=[]; try{ const a=await jget(`https://api.weather.gov/alerts/active?point=${P.lat.toFixed(4)},${P.lon.toFixed(4)}`,8000); al=(a.features||[]).map(x=>({ev:x.properties.event, h:x.properties.headline, ate:x.properties.ends||x.properties.expires})); }catch(e){}
-    WX={t:Date.now(),lat:P.lat,lon:P.lon,n:P.n,f,al}; store.set('wx',WX);
+    WX=await wxFetch(P); store.set('wx',WX);
   }catch(e){} finally{ wxBusy=false; }
   updWxFab(); return WX;
 }
@@ -877,7 +889,7 @@ function updWxFab(){
   const b=document.getElementById('fabWx'); if(!WX||!WX.f||!WX.f.current){ b.textContent='⛅'; return; }
   const c=WX.f.current; b.innerHTML=`${wI(c.weather_code,c.is_day)[0]}<span style="font-size:15px">${Math.round(c.temperature_2m)}°</span>${WX.al&&WX.al.length?'<span style="font-size:12px">⚠️</span>':''}`;
 }
-function toggleWx(){ const w=document.getElementById('wx'); if(w.classList.contains('show')){ w.classList.remove('show'); return; } w.classList.add('show'); renderWx(); wxLoad().then(renderWx); }
+function toggleWx(){ const w=document.getElementById('wx'); if(w.classList.contains('show')){ w.classList.remove('show'); WXP=null; return; } WXP=null; w.classList.add('show'); renderWx(); wxLoad().then(renderWx); }
 const hh = iso=>String(iso).slice(11,16);
 const dW = iso=>{ const d=new Date(iso+'T12:00'); return ['dom','seg','ter','qua','qui','sex','sáb'][d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); };
 function renderWx(){
@@ -885,10 +897,13 @@ function renderWx(){
   let h=`<div style="display:flex;justify-content:space-between;align-items:center"><b>🌦️ Previsão do tempo</b><button class="pill" style="background:#eee;box-shadow:none" onclick="toggleWx()">✕</button></div>`+
     `<div class="seg"><button class="${wxTab==='agora'?'on':''}" onclick="wxTab='agora';renderWx()">Agora / 7 dias</button><button class="${wxTab==='viagem'?'on':''}" onclick="wxTab='viagem';renderWx();wxTrip().then(renderWx)">Dias da viagem</button></div>`;
   if(wxTab==='agora'){
-    if(!WX||!WX.f){ h+=`<p class="muted">${wxBusy?'Carregando…':'Sem dados – precisa de internet.'}</p>`; }
+    const WX = WXP || window.WXG();
+    if(WXP) h=h.replace('<div class="seg">',`<div class="muted" style="margin:4px 0">📍 <b>${esc(WXP.n)}</b> · <a href="#" onclick="WXP=null;renderWx();return false">voltar para minha posição/mapa</a></div><div class="seg">`);
+    if(WXP&&WXP.loading&&!WXP.f){ h+=`<p class="muted">Carregando…</p>`; }
+    else if(!WX||!WX.f){ h+=`<p class="muted">${wxBusy?'Carregando…':'Sem dados – precisa de internet.'}</p>`; }
     else{
       const f=WX.f, c=f.current, wi=wI(c.weather_code,c.is_day), old=Date.now()-WX.t>2*3600e3;
-      h+=`<div class="muted">📍 ${esc(WX.n)}${old?` · atualizado ${new Date(WX.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} (sem internet?)`:''}</div>`;
+      h+=`<div class="muted">${WXP?'':'📍 '+esc(WX.n)}${old?` · atualizado ${new Date(WX.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} (sem internet?)`:''}</div>`;
       (WX.al||[]).forEach(a=>{ h+=`<div class="walert">⚠️ <b>${esc(NWSPT[a.ev]||a.ev)}</b>${NWSPT[a.ev]?` <span class="muted">(${esc(a.ev)})</span>`:''}${a.ate?`<br><span class="muted">até ${new Date(a.ate).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''}</div>`; });
       h+=`<div class="wnow"><span class="ic">${wi[0]}</span><span class="tp">${Math.round(c.temperature_2m)}°C</span><span>${wi[1]}<br><span class="muted">Sensação ${Math.round(c.apparent_temperature)}° · vento ${Math.round(c.wind_speed_10m)} km/h</span></span></div>`;
       const now=f.current.time; let i=f.hourly.time.findIndex(t=>t>=now.slice(0,13)); if(i<0)i=0;
@@ -928,6 +943,27 @@ async function wxTrip(force){
   return T;
 }
 let wxMoveT=null; map.on('moveend',()=>{ if(me) return; clearTimeout(wxMoveT); wxMoveT=setTimeout(()=>{ if(WX&&km(WX.lat,WX.lon,map.getCenter().lat,map.getCenter().lng)<40) return; wxLoad().then(()=>{ if(document.getElementById('wx').classList.contains('show')) renderWx(); }); },2500); });
+
+// tempo do lugar na data da visita
+const WXD = store.get('wxd',{});
+function visitDate(p){
+  if(p.at) return p.dt[0];
+  if(p.d&&p.d.length) return p.d[0];
+  let best=null,bd=1e9; DAYS.forEach(d=>{ const s=DATA.stops[d.night!=null?d.night:d.to]; const dd=km(p.lat,p.lon,s.lat,s.lon); if(dd<bd){bd=dd;best=d.dt;} });
+  return bd<120?best:null;
+}
+async function fillWx(p){
+  const el=()=>document.getElementById('wxline'); const dt=visitDate(p); if(!dt||!el()) return;
+  const iso=isoFromBR(dt), key=p.id+'|'+iso; const show=x=>{ if(el()&&byId[p.id]===p) el().innerHTML=`🌦️ ${dt}: ${wI(x.c)[0]} <b>${x.mx}° / ${x.mn}°</b> ${wI(x.c)[1]}${x.sn>0?` · ❄️ ${x.sn} cm`:''}${x.ws>=40?` · 💨 ${x.ws} km/h`:''} <span class="muted" style="font-weight:400">${x.hist?'(📊 como foi nessa data no ano passado)':'(previsão)'}</span>`; };
+  const c=WXD[key]; if(c && (c.hist ? true : Date.now()-c.t<3*3600e3)){ show(c); if(c.hist && (new Date(iso+'T12:00')-new Date())/864e5>=15) return; }
+  const dl='weather_code,temperature_2m_max,temperature_2m_min,snowfall_sum,wind_speed_10m_max';
+  try{
+    let x=null; const ahead=(new Date(iso+'T12:00')-new Date())/864e5;
+    if(ahead<15 && ahead>-1){ const j=await jget(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat.toFixed(3)}&longitude=${p.lon.toFixed(3)}&daily=${dl}&timezone=auto&forecast_days=16&wind_speed_unit=kmh`,12000); const k=j.daily.time.indexOf(iso); if(k>=0) x={t:Date.now(),c:j.daily.weather_code[k],mx:Math.round(j.daily.temperature_2m_max[k]),mn:Math.round(j.daily.temperature_2m_min[k]),sn:j.daily.snowfall_sum[k],ws:Math.round(j.daily.wind_speed_10m_max[k])}; }
+    if(!x){ const hi=iso.replace(/^(\d{4})/,y=>String(+y-1)); const j=await jget(`https://archive-api.open-meteo.com/v1/archive?latitude=${p.lat.toFixed(3)}&longitude=${p.lon.toFixed(3)}&start_date=${hi}&end_date=${hi}&daily=${dl}&timezone=auto&wind_speed_unit=kmh`,12000); const D=j.daily; x={t:Date.now(),hist:1,c:D.weather_code[0],mx:Math.round(D.temperature_2m_max[0]),mn:Math.round(D.temperature_2m_min[0]),sn:D.snowfall_sum[0],ws:Math.round(D.wind_speed_10m_max[0])}; }
+    WXD[key]=x; store.set('wxd',WXD); show(x);
+  }catch(e){}
+}
 
 // ================= HOJE / PENDÊNCIAS =================
 let hojeMode='dia', hojeK=null;
