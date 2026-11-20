@@ -900,7 +900,7 @@ function renderWx(){
     const WX = WXP || window.WXG();
     if(WXP) h=h.replace('<div class="seg">',`<div class="muted" style="margin:4px 0">📍 <b>${esc(WXP.n)}</b> · <a href="#" onclick="WXP=null;renderWx();return false">voltar para minha posição/mapa</a></div><div class="seg">`);
     if(WXP&&WXP.loading&&!WXP.f){ h+=`<p class="muted">Carregando…</p>`; }
-    else if(!WX||!WX.f){ h+=`<p class="muted">${wxBusy?'Carregando…':'Sem dados – precisa de internet.'}</p>`; }
+    else if(!WX||!WX.f){ h+=`<p class="muted">${wxBusy?'Carregando…':(navigator.onLine?'O serviço de previsão não respondeu agora – tente de novo em alguns minutos.':'Sem internet no momento.')}</p>`; }
     else{
       const f=WX.f, c=f.current, wi=wI(c.weather_code,c.is_day), old=Date.now()-WX.t>2*3600e3;
       h+=`<div class="muted">${WXP?'':'📍 '+esc(WX.n)}${old?` · atualizado ${new Date(WX.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} (sem internet?)`:''}</div>`;
