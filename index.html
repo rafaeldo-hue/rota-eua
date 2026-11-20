@@ -132,6 +132,19 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
 .mres{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:15px;line-height:1.5}
 .mres .big{font-size:22px;font-weight:800;color:#5b21b6}
 .dline{color:#5b21b6;font-weight:600}
+.fab.wx{width:auto;min-width:48px;padding:0 10px;border-radius:24px;font-size:18px;font-weight:800;gap:4px;color:#14213d}
+#wx{position:fixed;right:10px;top:calc(var(--safe-t) + 58px);width:min(380px,94vw);max-height:calc(100vh - 150px);overflow:auto;z-index:1100;background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.3);padding:12px 14px;display:none}
+#wx.show{display:block}
+#wx .seg{display:flex;gap:6px;margin:6px 0 10px}#wx .seg button,.hseg button{flex:1;border:0;border-radius:10px;padding:7px;background:#eef2f7;font-weight:700;font-size:13px}#wx .seg button.on,.hseg button.on{background:#14213d;color:#fff}
+.wnow{display:flex;align-items:center;gap:12px}.wnow .ic{font-size:44px}.wnow .tp{font-size:34px;font-weight:800}
+.whrs{display:flex;gap:6px;overflow-x:auto;padding:6px 0}.whrs div{flex:none;text-align:center;font-size:12px;background:#f1f5f9;border-radius:10px;padding:6px 7px;min-width:44px}.whrs b{display:block;font-size:18px}
+.wd{display:grid;grid-template-columns:62px 30px 1fr auto;gap:6px;align-items:center;padding:6px 0;border-top:1px solid #eef2f7;font-size:13px}.wd .e{font-size:20px}
+.walert{background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:8px 10px;margin:6px 0;font-size:13px}
+.hseg{display:flex;gap:6px;margin:4px 0 10px}
+.hcard{background:#fff;border-radius:14px;padding:10px 12px;margin:8px 0;box-shadow:0 1px 4px rgba(0,0,0,.08)}.hcard h4{margin:0 0 6px;font-size:15px}
+.hnav{display:flex;align-items:center;gap:8px}.hnav h3{flex:1;margin:0;text-align:center;font-size:17px}.hnav button{border:0;background:#eef2f7;border-radius:10px;font-size:18px;padding:6px 14px}
+.pend{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px solid #eef2f7;font-size:14px}.pend .st{font-size:18px}.pend .t{flex:1}.pend .t small{display:block;color:var(--mut)}
+.mini{border:0;border-radius:8px;padding:5px 8px;font-size:12px;font-weight:700;background:#eef2f7;margin:4px 4px 0 0;display:inline-block;color:var(--ink);text-decoration:none}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + var(--safe-b));z-index:2000;background:#14213d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
@@ -149,7 +162,9 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
 <div class="banner" id="favBanner"><span id="bannerTxt">⭐ Mostrando só os favoritos</span><button class="pill" onclick="showAll()">Mostrar tudo</button></div>
 <div class="toast" id="toast"></div>
 <div id="dock"><div class="dh" onclick="toggleDock()"><span class="full">📅 Dias do roteiro</span><span class="short">📅</span><span id="dockArr">◀</span></div><div class="dl" id="dockList"></div></div>
+<div id="wx"></div>
 <div id="fabs">
+  <button class="fab wx" id="fabWx" onclick="toggleWx()" title="Previsão do tempo">⛅</button>
   <button class="fab" id="fabLoc" onclick="toggleFollow()" title="Minha localização">📍</button>
   <button class="fab" onclick="chooseBase()" title="Tipo de mapa">🛰️</button>
   <button class="fab" onclick="fitRoute()" title="Ver rota inteira">🗺️</button>
@@ -165,6 +180,7 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
   <div class="seg"><button id="sbNear" class="on" onclick="sNear=true;segS()">Perto do mapa</button><button id="sbAll" onclick="sNear=false;segS()">Em qualquer lugar</button></div>
   <div class="muted" id="sInfo">Busca no OpenStreetMap (grátis). Os resultados aparecem no mapa como alfinetes rosa 📍 e você pode adicionar ao mapa da galera.</div>
   <div id="sList"></div></div>
+<div class="panel" id="p-hoje"><div class="hseg"><button id="hsDia" class="on" onclick="hojeMode='dia';renderHoje()">📌 Dia</button><button id="hsPend" onclick="hojeMode='pend';renderHoje()">📋 Pendências</button></div><div id="hojeBody"></div></div>
 <div class="panel" id="p-avisos"><h2>Avisos importantes</h2><div id="avList"></div></div>
 <div class="panel filt" id="p-filtros"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:4px 0 12px">O que mostrar no mapa</h2><button class="pill" style="background:#eee;box-shadow:none;flex:none" onclick="openTab('mapa')">✕ Fechar</button></div><div id="filtList"></div>
   <div class="btns" style="grid-template-columns:1fr"><button class="btn pri" onclick="openTab('mapa')">🗺️ Ver no mapa</button></div>
@@ -176,6 +192,7 @@ body.favon #dock{top:calc(var(--safe-t) + 108px)}
 
 <nav id="nav">
   <button class="act" data-t="mapa" onclick="openTab('mapa')"><span>🗺️</span>Mapa</button>
+  <button data-t="hoje" onclick="openTab('hoje')"><span>📌</span>Hoje</button>
   <button data-t="roteiro" onclick="openTab('roteiro')"><span>🗓️</span>Roteiro</button>
   <button data-t="perto" onclick="openTab('perto')"><span>📍</span>Perto</button>
   <button data-t="avisos" onclick="openTab('avisos')"><span>⚠️</span>Avisos</button>
@@ -295,7 +312,7 @@ function draw(){
   });
   document.getElementById('favN').textContent = FAV.size;
   document.getElementById('favPill').classList.toggle('on',F.onlyFav);
-  document.getElementById('resN').textContent = RES.size;
+  document.getElementById('resN').textContent = resCount();
   document.getElementById('resPill').classList.toggle('on',F.onlyRes);
   document.getElementById('bannerTxt').textContent = F.onlyRes ? '✅ Mostrando só as reservas pagas' : '⭐ Mostrando só os favoritos';
   document.getElementById('favBanner').classList.toggle('show',F.onlyFav||F.onlyRes); document.body.classList.toggle('favon',F.onlyFav||F.onlyRes);
@@ -515,9 +532,10 @@ function itemHTML(p){
 // tabs
 function openTab(t){
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
-  ['roteiro','perto','avisos','filtros','busca'].forEach(x=>document.getElementById('p-'+x).classList.toggle('show',x===t));
+  ['hoje','roteiro','perto','avisos','filtros','busca'].forEach(x=>document.getElementById('p-'+x).classList.toggle('show',x===t));
   closeSheet();
   if(t==='perto') renderNear();
+  if(t==='hoje') renderHoje();
   if(t==='mapa') setTimeout(()=>map.invalidateSize(),50);
 }
 function openFilters(){ openTab('filtros'); document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('act')); }
@@ -817,7 +835,7 @@ async function delRes(id){
     if(F.onlyRes && !RES.size){ F.onlyRes=false; saveF(); } draw(); renderDock(); openPlace(id); toast('Reserva removida.'); }catch(e){}
 }
 function resList(){
-  const arr=[...RES.values()].sort((a,b)=>String(a.checkin).localeCompare(String(b.checkin)));
+  const arr=[...RES.values()].filter(r=>!isNM(r.place_id)).sort((a,b)=>String(a.checkin).localeCompare(String(b.checkin)));
   document.getElementById('sheetBody').innerHTML = `<h3>✅ Reservas pagas (${arr.length})</h3>` + arr.map(r=>{
     const p=byId[r.place_id]; return `<div class="it" onclick="${p?`openPlace('${r.place_id}',true)`:''}"><div class="mk" style="background:#16a34a">${p&&p.at?'🎟️':'✅'}</div><div class="t"><b>${esc(p?p.n:r.nome)}</b><span>📅 ${p&&p.at?dBR(r.checkin):resTxt(r)}${r.valor?' · '+esc(r.valor):''}</span></div><div>›</div></div>`; }).join('') +
     `<p class="muted">Toque numa reserva para ver no mapa.</p>`;
@@ -830,6 +848,185 @@ function toggleResMode(){
 }
 function showAll(){ F.onlyFav=false; F.onlyRes=false; saveF(); renderFilt(); }
 function resForNight(dt){ const iso=isoFromBR(dt); return [...RES.values()].filter(r=>!/^a\d/.test(r.place_id) && r.checkin<=iso && iso<r.checkout); }
+const isNM = id=>/^nsr-/.test(id);
+function resCount(){ let n=0; RES.forEach((r,k)=>{ if(!isNM(k)) n++; }); return n; }
+
+// ================= tempo (Open-Meteo + NWS) =================
+const WMO={0:['☀️','Céu limpo'],1:['🌤️','Quase limpo'],2:['⛅','Parcialmente nublado'],3:['☁️','Nublado'],45:['🌫️','Neblina'],48:['🌫️','Neblina com geada'],51:['🌦️','Garoa fraca'],53:['🌦️','Garoa'],55:['🌧️','Garoa forte'],56:['🌧️','Garoa congelante'],57:['🌧️','Garoa congelante'],61:['🌧️','Chuva fraca'],63:['🌧️','Chuva'],65:['🌧️','Chuva forte'],66:['🌨️','Chuva congelante'],67:['🌨️','Chuva congelante'],71:['🌨️','Neve fraca'],73:['❄️','Neve'],75:['❄️','Neve forte'],77:['🌨️','Grãos de neve'],80:['🌦️','Pancadas de chuva'],81:['🌧️','Pancadas de chuva'],82:['⛈️','Pancadas fortes'],85:['🌨️','Pancadas de neve'],86:['❄️','Pancadas de neve forte'],95:['⛈️','Trovoada'],96:['⛈️','Trovoada com granizo'],99:['⛈️','Trovoada com granizo']};
+const wI=(c,day)=>{ const w=WMO[c]||['🌡️','—']; return (day===0&&(c===0||c===1))?['🌙',w[1]]:w; };
+const NWSPT={'Winter Storm Warning':'Alerta de tempestade de inverno','Winter Storm Watch':'Possível tempestade de inverno','Winter Weather Advisory':'Aviso de neve/gelo','Blizzard Warning':'Alerta de nevasca','Wind Advisory':'Aviso de vento forte','High Wind Warning':'Alerta de vento muito forte','High Wind Watch':'Possível vento muito forte','Freeze Warning':'Alerta de congelamento','Hard Freeze Warning':'Alerta de congelamento forte','Frost Advisory':'Aviso de geada','Flood Warning':'Alerta de enchente','Flash Flood Warning':'Alerta de enxurrada','Flood Watch':'Possível enchente','Flash Flood Watch':'Possível enxurrada','Dense Fog Advisory':'Aviso de neblina densa','Red Flag Warning':'Alerta de risco de incêndio','Extreme Cold Warning':'Alerta de frio extremo','Cold Weather Advisory':'Aviso de frio','Dust Storm Warning':'Alerta de tempestade de poeira','Blowing Dust Advisory':'Aviso de poeira','High Surf Advisory':'Aviso de ondas altas','Beach Hazards Statement':'Aviso de perigo na praia','Coastal Flood Advisory':'Aviso de maré alta','Avalanche Warning':'Alerta de avalanche','Ice Storm Warning':'Alerta de chuva congelante'};
+let WX = store.get('wx', null), wxTab='agora', wxBusy=false;
+function wxPoint(){
+  if(me) return {lat:me[0],lon:me[1],n:'sua posição'};
+  const k=DAYS.findIndex(d=>d.dt===todayStr()); if(k>=0){ const s=DATA.stops[DAYS[k].night!=null?DAYS[k].night:DAYS[k].to]; return {lat:s.lat,lon:s.lon,n:shortN(s.n)}; }
+  const c=map.getCenter(); return {lat:c.lat,lon:c.lng,n:'centro do mapa'};
+}
+async function jget(u,ms){ const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),ms||15000); try{ const r=await fetch(u,{signal:ctl.signal}); if(!r.ok) throw new Error(r.status); return await r.json(); } finally{ clearTimeout(t); } }
+async function wxLoad(force){
+  const P=wxPoint();
+  if(!force && WX && Date.now()-WX.t<20*60e3 && km(WX.lat,WX.lon,P.lat,P.lon)<25) return WX;
+  if(wxBusy) return WX; wxBusy=true;
+  try{
+    const f=await jget(`https://api.open-meteo.com/v1/forecast?latitude=${P.lat.toFixed(3)}&longitude=${P.lon.toFixed(3)}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,precipitation_probability,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,snowfall_sum,wind_speed_10m_max,sunrise,sunset&timezone=auto&forecast_days=7&wind_speed_unit=kmh`);
+    let al=[]; try{ const a=await jget(`https://api.weather.gov/alerts/active?point=${P.lat.toFixed(4)},${P.lon.toFixed(4)}`,8000); al=(a.features||[]).map(x=>({ev:x.properties.event, h:x.properties.headline, ate:x.properties.ends||x.properties.expires})); }catch(e){}
+    WX={t:Date.now(),lat:P.lat,lon:P.lon,n:P.n,f,al}; store.set('wx',WX);
+  }catch(e){} finally{ wxBusy=false; }
+  updWxFab(); return WX;
+}
+function updWxFab(){
+  const b=document.getElementById('fabWx'); if(!WX||!WX.f||!WX.f.current){ b.textContent='⛅'; return; }
+  const c=WX.f.current; b.innerHTML=`${wI(c.weather_code,c.is_day)[0]}<span style="font-size:15px">${Math.round(c.temperature_2m)}°</span>${WX.al&&WX.al.length?'<span style="font-size:12px">⚠️</span>':''}`;
+}
+function toggleWx(){ const w=document.getElementById('wx'); if(w.classList.contains('show')){ w.classList.remove('show'); return; } w.classList.add('show'); renderWx(); wxLoad().then(renderWx); }
+const hh = iso=>String(iso).slice(11,16);
+const dW = iso=>{ const d=new Date(iso+'T12:00'); return ['dom','seg','ter','qua','qui','sex','sáb'][d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); };
+function renderWx(){
+  const w=document.getElementById('wx');
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center"><b>🌦️ Previsão do tempo</b><button class="pill" style="background:#eee;box-shadow:none" onclick="toggleWx()">✕</button></div>`+
+    `<div class="seg"><button class="${wxTab==='agora'?'on':''}" onclick="wxTab='agora';renderWx()">Agora / 7 dias</button><button class="${wxTab==='viagem'?'on':''}" onclick="wxTab='viagem';renderWx();wxTrip().then(renderWx)">Dias da viagem</button></div>`;
+  if(wxTab==='agora'){
+    if(!WX||!WX.f){ h+=`<p class="muted">${wxBusy?'Carregando…':'Sem dados – precisa de internet.'}</p>`; }
+    else{
+      const f=WX.f, c=f.current, wi=wI(c.weather_code,c.is_day), old=Date.now()-WX.t>2*3600e3;
+      h+=`<div class="muted">📍 ${esc(WX.n)}${old?` · atualizado ${new Date(WX.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} (sem internet?)`:''}</div>`;
+      (WX.al||[]).forEach(a=>{ h+=`<div class="walert">⚠️ <b>${esc(NWSPT[a.ev]||a.ev)}</b>${NWSPT[a.ev]?` <span class="muted">(${esc(a.ev)})</span>`:''}${a.ate?`<br><span class="muted">até ${new Date(a.ate).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>`:''}</div>`; });
+      h+=`<div class="wnow"><span class="ic">${wi[0]}</span><span class="tp">${Math.round(c.temperature_2m)}°C</span><span>${wi[1]}<br><span class="muted">Sensação ${Math.round(c.apparent_temperature)}° · vento ${Math.round(c.wind_speed_10m)} km/h</span></span></div>`;
+      const now=f.current.time; let i=f.hourly.time.findIndex(t=>t>=now.slice(0,13)); if(i<0)i=0;
+      h+=`<div class="whrs">`+f.hourly.time.slice(i,i+24).map((t,j)=>{ const k=i+j; return `<div>${hh(t)}<b>${wI(f.hourly.weather_code[k],f.hourly.is_day[k])[0]}</b>${Math.round(f.hourly.temperature_2m[k])}°${f.hourly.precipitation_probability[k]>=20?`<br>💧${f.hourly.precipitation_probability[k]}%`:''}</div>`; }).join('')+`</div>`;
+      const d=f.daily; h+=d.time.map((t,k)=>`<div class="wd"><span>${k?dW(t):'Hoje'}</span><span class="e">${wI(d.weather_code[k])[0]}</span><span>${wI(d.weather_code[k])[1]}${d.snowfall_sum[k]>0?` · ❄️ ${d.snowfall_sum[k]} cm`:''}${d.precipitation_probability_max[k]>=20?` · 💧${d.precipitation_probability_max[k]}%`:''}${d.wind_speed_10m_max[k]>=40?` · 💨${Math.round(d.wind_speed_10m_max[k])} km/h`:''}<br><span class="muted">🌅 ${hh(d.sunrise[k])} · 🌇 ${hh(d.sunset[k])}</span></span><b>${Math.round(d.temperature_2m_max[k])}° / ${Math.round(d.temperature_2m_min[k])}°</b></div>`).join('');
+      h+=`<p class="muted">Com o 📍 ligado, a previsão é de onde você está; sem GPS, do centro do mapa (ou da parada do dia durante a viagem). Fonte: Open-Meteo e alertas do NWS (EUA).</p>`;
+    }
+  } else {
+    const T=store.get('wxTrip',null);
+    if(!T){ h+=`<p class="muted">${wxBusy?'Carregando…':'Sem dados – precisa de internet.'}</p>`; }
+    else{
+      h+=`<div class="muted">Para cada noite, o tempo no lugar de pernoite. A previsão real só existe ~15 dias antes; antes disso mostro <b>como foi nessa mesma data no ano passado</b> (marcado com 📊).</div>`;
+      h+=DAYS.map((dd,k)=>{ const x=T.d[k]; if(!x) return ''; const s=DATA.stops[dd.night!=null?dd.night:dd.to];
+        return `<div class="wd" onclick="goDay(${k});toggleWx()" style="cursor:pointer"><span>D${dd.n} ${dd.dt}</span><span class="e">${wI(x.c)[0]}</span><span>${esc(shortN(s.n))}${x.sn>0?` · ❄️ ${x.sn} cm`:''}${x.pp!=null&&x.pp>=20?` · 💧${x.pp}%`:''}${x.ws>=40?` · 💨${x.ws}`:''}<br><span class="muted">${x.hist?'📊 ano passado':'previsão'} · 🌇 ${x.ss||''}</span></span><b>${x.mx}° / ${x.mn}°</b></div>`; }).join('');
+      h+=`<p class="muted">Atualizado ${new Date(T.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}. Toque num dia para ver o trecho no mapa.</p>`;
+    }
+  }
+  w.innerHTML=h;
+}
+async function wxTrip(force){
+  let T=store.get('wxTrip',null); if(!force && T && Date.now()-T.t<3*3600e3) return T;
+  if(wxBusy) return T; wxBusy=true;
+  try{
+    const pts=[...new Set(DAYS.map(d=>d.night!=null?d.night:d.to))];
+    const la=pts.map(i=>DATA.stops[i].lat.toFixed(3)).join(','), lo=pts.map(i=>DATA.stops[i].lon.toFixed(3)).join(',');
+    const dl='weather_code,temperature_2m_max,temperature_2m_min,snowfall_sum,wind_speed_10m_max,sunset';
+    const toA=j=>Array.isArray(j)?j:[j];
+    const hist=toA(await jget(`https://archive-api.open-meteo.com/v1/archive?latitude=${la}&longitude=${lo}&start_date=2025-12-14&end_date=2026-01-13&daily=${dl}&timezone=auto&wind_speed_unit=kmh`,25000));
+    let fc=null; const today=new Date(); const start=new Date(2026,11,14);
+    if((start-today)/864e5 < 16){ try{ fc=toA(await jget(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&daily=${dl},precipitation_probability_max&timezone=auto&forecast_days=16&wind_speed_unit=kmh`,20000)); }catch(e){} }
+    const d=DAYS.map(dd=>{ const pi=pts.indexOf(dd.night!=null?dd.night:dd.to); const iso=isoFromBR(dd.dt);
+      if(fc&&fc[pi]){ const D=fc[pi].daily, k=D.time.indexOf(iso); if(k>=0) return {c:D.weather_code[k],mx:Math.round(D.temperature_2m_max[k]),mn:Math.round(D.temperature_2m_min[k]),sn:D.snowfall_sum[k],ws:Math.round(D.wind_speed_10m_max[k]),pp:D.precipitation_probability_max[k],ss:hh(D.sunset[k])}; }
+      const D=hist[pi]&&hist[pi].daily; if(!D) return null; const hi=iso.replace(/^(\d{4})/,y=>String(+y-1)); const k=D.time.indexOf(hi); if(k<0) return null;
+      return {hist:1,c:D.weather_code[k],mx:Math.round(D.temperature_2m_max[k]),mn:Math.round(D.temperature_2m_min[k]),sn:D.snowfall_sum[k],ws:Math.round(D.wind_speed_10m_max[k]),pp:null,ss:hh(D.sunset[k])}; });
+    T={t:Date.now(),d}; store.set('wxTrip',T);
+  }catch(e){} finally{ wxBusy=false; }
+  return T;
+}
+let wxMoveT=null; map.on('moveend',()=>{ if(me) return; clearTimeout(wxMoveT); wxMoveT=setTimeout(()=>{ if(WX&&km(WX.lat,WX.lon,map.getCenter().lat,map.getCenter().lng)<40) return; wxLoad().then(()=>{ if(document.getElementById('wx').classList.contains('show')) renderWx(); }); },2500); });
+
+// ================= HOJE / PENDÊNCIAS =================
+let hojeMode='dia', hojeK=null;
+const TRIP0=new Date(2026,11,14);
+function todayK(){ return DAYS.findIndex(d=>d.dt===todayStr()); }
+function onRoute(k){
+  const d=DAYS[k]; if(d.free) return [];
+  const a=Math.min(SIDX[d.from],SIDX[d.to]), b=Math.max(SIDX[d.from],SIDX[d.to]); const seg=DATA.route.slice(a,b+1); if(seg.length<2) return [];
+  const bb=L.latLngBounds(seg).pad(0.05); const cum=[0]; for(let i=1;i<seg.length;i++) cum.push(cum[i-1]+km(seg[i-1][0],seg[i-1][1],seg[i][0],seg[i][1]));
+  const out=[]; DATA.places.forEach(p=>{
+    const t = p.c==='dump'?'dump' : (p.c==='park'&&p.s==='truck')?'gas' : (p.c==='park'&&p.s==='walmart')?'mkt' : null; if(!t) return;
+    if(!bb.contains([p.lat,p.lon])) return; let best=1e9,bi=0; for(let i=0;i<seg.length;i+=2){ const dd=km(p.lat,p.lon,seg[i][0],seg[i][1]); if(dd<best){best=dd;bi=i;} }
+    if(best<=2.5) out.push({p,t,at:Math.round(cum[bi])}); });
+  return out.sort((x,y)=>x.at-y.at);
+}
+function npsLinks(dt){ const s=new Set(); attrOf(dt).forEach(a=>{ const m=/https:\/\/www\.nps\.gov\/(\w+)\//.exec(a.l||''); if(m) s.add(m[1]); }); return [...s]; }
+const NPSN={grca:'Grand Canyon',zion:'Zion',brca:'Bryce',arch:'Arches',cany:'Canyonlands',care:'Capitol Reef',deva:'Death Valley',yose:'Yosemite',jotr:'Joshua Tree',glca:'Glen Canyon',cabr:'Cabrillo',goga:'Golden Gate'};
+function stateLinks(k){
+  const d=DAYS[k], st=DATA.stops; const ids=d.free?[d.to]:[d.from].concat(d.idx); const S=new Set();
+  ids.forEach(i=>{ const s=st[i]; if(s.lon<-114.6&&s.lat<42&&!(s.lat>35.9&&s.lat<36.4&&s.lon>-115.4)) S.add('CA'); else if(s.lat>=37&&s.lon>-114.1) S.add('UT'); else if(s.lon<-114.05&&s.lat>35.9) S.add('NV'); else S.add('AZ'); });
+  const L2={CA:['Califórnia – Caltrans QuickMap','https://quickmap.dot.ca.gov/'],AZ:['Arizona – AZ511','https://www.az511.gov/'],UT:['Utah – UDOT Traffic','https://udottraffic.utah.gov/'],NV:['Nevada – NV Roads','https://www.nvroads.com/']};
+  return [...S].map(x=>L2[x]);
+}
+function renderHoje(){
+  document.getElementById('hsDia').classList.toggle('on',hojeMode==='dia'); document.getElementById('hsPend').classList.toggle('on',hojeMode==='pend');
+  const P=pendings(); document.getElementById('hsPend').textContent=`📋 Pendências${P.n?` (${P.n})`:' ✓'}`;
+  const el=document.getElementById('hojeBody');
+  if(hojeMode==='pend'){ el.innerHTML=P.html; return; }
+  const tk=todayK(); if(hojeK==null) hojeK = tk>=0?tk:0;
+  const k=hojeK, d=DAYS[k], st=DATA.stops, ns=st[d.night!=null?d.night:d.to];
+  const falta=Math.ceil((TRIP0-new Date())/864e5);
+  let h = tk<0 && falta>0 ? `<div class="hcard" style="background:#14213d;color:#fff;text-align:center"><b>✈️ Faltam ${falta} dias para a viagem</b><br><span style="opacity:.8;font-size:13px">Durante a viagem esta tela abre sozinha no dia certo.</span></div>` : '';
+  h += `<div class="hnav"><button onclick="hojeK=Math.max(0,hojeK-1);renderHoje()" ${k?'':'disabled'}>◀</button><h3>Dia ${d.n} · ${dW(isoFromBR(d.dt))}${k===tk?' · HOJE':''}</h3><button onclick="hojeK=Math.min(DAYS.length-1,hojeK+1);renderHoje()" ${k<DAYS.length-1?'':'disabled'}>▶</button></div>`;
+  // trajeto
+  if(d.free) h += `<div class="hcard"><h4>🛋️ Dia livre em ${esc(shortN(st[d.to].n))}</h4><span class="muted">Sem deslocamento grande – dia de passear.</span><br><button class="mini" onclick="goDay(${k})">🗺️ Ver no mapa</button></div>`;
+  else{
+    const leg=d.idx.filter(i=>i>0).map(i=>DATA.legs[i-1]).filter(Boolean); const kmT=leg.reduce((x,l)=>x+l.km,0), hT=leg.reduce((x,l)=>x+l.h,0);
+    const pts=(k===0?d.idx:[d.from].concat(d.idx)).map(i=>st[i]); const o=pts[0], de=pts[pts.length-1], wp=pts.slice(1,-1).map(x=>x.lat+','+x.lon).join('|');
+    const gm=`https://www.google.com/maps/dir/?api=1&origin=${o.lat},${o.lon}&destination=${de.lat},${de.lon}${wp?'&waypoints='+encodeURIComponent(wp):''}&travelmode=driving`;
+    h += `<div class="hcard"><h4>🚐 Trajeto</h4>${pts.map(x=>esc(shortN(x.n))).join(' → ')}<br>${kmT?`<b>~${kmT} km</b> · ~${hT.toFixed(1)} h de carro (~${(hT*RV_F).toFixed(1)} h de motorhome)`:''}<br><button class="mini" onclick="goDay(${k})">🗺️ Ver no mapa</button><a class="mini" href="${gm}" target="_blank" rel="noopener">🧭 Abrir no Google Maps</a></div>`;
+  }
+  // pernoite
+  const rs=resForNight(d.dt);
+  h += `<div class="hcard"><h4>🌙 Pernoite – ${esc(shortN(ns.n))}</h4>`;
+  if(k===DAYS.length-1) h+=`<span class="muted">Último dia – devolução do motorhome na El Monte RV até 11h.</span>`;
+  else if(rs.length) h += rs.map(r=>{ const p=byId[r.place_id]; return isNM(r.place_id)?`☑️ Sem reserva necessária${r.obs?' – '+esc(r.obs):''}`:`<div class="rescard" style="cursor:pointer" onclick="openPlace('${r.place_id}',true)"><b>✅ ${esc(p?p.n:r.nome)}</b><br>📅 ${resTxt(r)}${r.valor?' · 💲 '+esc(r.valor):''}${r.obs?'<br>📝 '+esc(r.obs):''}</div>`; }).join('');
+  else{ const op=DATA.places.filter(p=>p.v&&p.d&&p.d.includes(d.dt)).slice(0,4);
+    h += `<div style="color:#b91c1c;font-weight:700">⚠️ Ainda sem reserva para esta noite</div>${op.length?`<div class="muted">Opções pesquisadas:</div>`+op.map(itemHTML).join(''):''}<button class="mini" onclick="showStop(${d.night!=null?d.night:d.to})">Ver opções no mapa</button>`; }
+  h += `</div>`;
+  // tempo
+  const T=store.get('wxTrip',null), x=T&&T.d[k];
+  h += `<div class="hcard"><h4>🌦️ Tempo em ${esc(shortN(ns.n))}</h4>${x?`<span style="font-size:22px">${wI(x.c)[0]}</span> <b>${x.mx}° / ${x.mn}°</b> ${wI(x.c)[1]}${x.sn>0?` · ❄️ ${x.sn} cm`:''}${x.ws>=40?` · 💨 ${x.ws} km/h`:''}<br><span class="muted">${x.hist?'📊 como foi nessa data no ano passado (a previsão real aparece ~15 dias antes)':'previsão'}${x.ss?` · 🌇 pôr do sol ${x.ss}`:''}</span>`:`<span class="muted">Abra a previsão (botão ⛅ no mapa) com internet para carregar.</span>`}</div>`;
+  // atrações
+  const at=attrOf(d.dt); if(at.length) h += `<div class="hcard"><h4>🎡 Atrações do dia (${at.length})</h4>${at.map(atItem).join('')}</div>`;
+  // no caminho
+  const R=onRoute(k);
+  if(R.length){ const grp=(t,ic,nm)=>{ const a=R.filter(r=>r.t===t).slice(0,5); return a.length?`<div style="margin-top:6px"><b>${ic} ${nm}</b>${a.map(r=>`<div class="pend" style="cursor:pointer" onclick="openPlace('${r.p.id}',true)"><span class="t">${esc(r.p.n)}<small>~${r.at} km depois da saída${r.p.p?' · '+esc(r.p.p):''}</small></span><span>›</span></div>`).join('')}</div>`:''; };
+    h += `<div class="hcard"><h4>⛽ No caminho</h4>${grp('gas','⛽','Postos de caminhoneiro (diesel/gasolina, banheiro)')}${grp('dump','🚽','Dump stations')}${grp('mkt','🛒','Walmart (mercado)')}<p class="muted">Pontos a até ~2,5 km da rota, pela ordem do caminho.</p></div>`; }
+  // estradas
+  const nl=npsLinks(d.dt), sl=stateLinks(k);
+  h += `<div class="hcard"><h4>🛣️ Estradas e parques – conferir no dia</h4>${sl.map(([n,u])=>`<a class="mini" href="${u}" target="_blank" rel="noopener">${n}</a>`).join('')}${nl.map(c=>`<a class="mini" href="https://www.nps.gov/${c}/planyourvisit/conditions.htm" target="_blank" rel="noopener">⚠️ Alertas ${NPSN[c]||c.toUpperCase()}</a>`).join('')}</div>`;
+  el.innerHTML=h;
+}
+const TICKET = a=>/reserv|compre|tour guiado|hor[aá]rio de entrada/i.test(a.ing||'');
+function nightGroups(){
+  const g=[]; DAYS.slice(0,-1).forEach((d,k)=>{ const ni=d.night!=null?d.night:d.to; const last=g[g.length-1];
+    if(last&&last.ni===ni) last.ks.push(k); else g.push({ni,ks:[k]}); }); return g;
+}
+function pendings(){
+  let n=0, h='<div class="hcard"><h4>🌙 Noites</h4>';
+  nightGroups().forEach(G=>{ const s=DATA.stops[G.ni]; const cov=G.ks.map(k=>resForNight(DAYS[k].dt)); const ok=cov.filter(c=>c.length).length;
+    const nm=cov.every(c=>c.length&&c.every(r=>isNM(r.place_id)));
+    const st= ok===G.ks.length ? (nm?'☑️':'✅') : ok?'🟡':'🔴'; if(ok<G.ks.length) n++;
+    const d0=DAYS[G.ks[0]], d1=DAYS[G.ks[G.ks.length-1]]; const nn=G.ks.length;
+    const who = cov.flat().filter((r,i,a)=>a.indexOf(r)===i).map(r=>isNM(r.place_id)?'sem reserva necessária':(byId[r.place_id]||{n:r.nome}).n);
+    h+=`<div class="pend"><span class="st">${st}</span><span class="t"><b>${d0.dt}${nn>1?' a '+d1.dt:''} · ${esc(shortN(s.n))}</b> <span class="muted">(${nn} noite${nn>1?'s':''})</span><small>${ok===nn?esc(who.join(', ')):ok?`Falta ${nn-ok} noite(s) – ${esc(who.join(', '))}`:'Sem reserva'}</small>${ok<nn?`<button class="mini" onclick="showStop(${G.ni})">🔎 Ver opções</button><button class="mini" onclick="markNoRes(${G.ks[0]},${G.ks[G.ks.length-1]})">☑️ Não precisa reservar</button>`:(nm?`<button class="mini" onclick="unmarkNoRes(${G.ks[0]})">Desfazer</button>`:'')}</span></div>`; });
+  h+='</div><div class="hcard"><h4>🎟️ Ingressos e reservas com hora marcada</h4>';
+  AT.filter(TICKET).sort((a,b)=>isoFromBR(a.dt[0]).localeCompare(isoFromBR(b.dt[0]))).forEach(a=>{ const ok=RES.has(a.id); if(!ok) n++;
+    h+=`<div class="pend"><span class="st">${ok?'✅':'🔴'}</span><span class="t"><b>${esc(a.n)}</b> <span class="muted">(${a.dt.join(' ou ')})</span><small>${ok?'Comprado – '+esc(dBR(RES.get(a.id).checkin))+(RES.get(a.id).obs?' · '+esc(RES.get(a.id).obs):''):esc(a.ing)}</small>${ok?'':`${a.l?`<a class="mini" href="${esc(a.l)}" target="_blank" rel="noopener">🌐 Comprar / reservar</a>`:''}<button class="mini" onclick="resForm('${a.id}')">🎟️ Já comprei</button>`}</span></div>`; });
+  h+='</div><p class="muted">🔴 falta fazer · 🟡 parcial · ✅ pago · ☑️ marcado como "não precisa" (Walmart, BLM etc.). Tudo isso é compartilhado com a família.</p>';
+  return {n, html:h};
+}
+function markNoRes(k0,k1){
+  const s=DATA.stops[DAYS[k0].night!=null?DAYS[k0].night:DAYS[k0].to];
+  document.getElementById('sheetBody').innerHTML=`<h3>☑️ Não precisa reservar</h3><div class="muted">${esc(shortN(s.n))} · ${DAYS[k0].dt}${k1>k0?' a '+DAYS[k1].dt:''}</div><div class="frm"><label>Onde vão dormir? (opcional)</label><input id="nrO" placeholder="Ex.: Walmart de Page, BLM, estacionamento do cassino"></div><div class="btns"><button class="btn" onclick="closeSheet()">Cancelar</button><button class="btn pri" style="grid-column:auto" onclick="markNoResGo(${k0},${k1})">Salvar</button></div>`;
+  document.getElementById('sheet').classList.add('show');
+}
+async function markNoResGo(k0,k1){
+  const s=DATA.stops[DAYS[k0].night!=null?DAYS[k0].night:DAYS[k0].to]; const ci=isoFromBR(DAYS[k0].dt), co=nextISO(isoFromBR(DAYS[k1].dt));
+  const ob=(document.getElementById('nrO')||{value:''}).value.trim();
+  const idn=await needId(); if(!idn){ openTab('hoje'); return; }
+  const id='nsr-'+ci; const body={action:'res', id, nome:'Sem reserva necessária – '+shortN(s.n), ll:s.lat+','+s.lon, checkin:ci, checkout:co, valor:'', obs:ob, autor:idn.autor, code:idn.code};
+  try{ await send(body); const rr={place_id:id,nome:body.nome,checkin:ci,checkout:co,valor:'',obs:ob,autor:idn.autor}; RESL=RESL.filter(r=>r.place_id!==id); RESL.push(rr); RES.set(id,rr); store.set('res',RESL); draw(); renderDock(); openTab('hoje'); toast('☑️ Marcado para a galera'); }catch(e){ openTab('hoje'); }
+}
+async function unmarkNoRes(k0){
+  const iso=isoFromBR(DAYS[k0].dt); const r=[...RES.values()].find(r=>isNM(r.place_id)&&r.checkin<=iso&&iso<r.checkout); if(!r) return;
+  const idn=await needId(); if(!idn) return;
+  try{ await send({action:'unres', id:r.place_id, autor:idn.autor, code:idn.code}); RESL=RESL.filter(x=>x.place_id!==r.place_id); RES.delete(r.place_id); store.set('res',RESL); draw(); renderDock(); openTab('hoje'); }catch(e){}
+}
 
 // ================= painel de dias =================
 const DAYS = (()=>{ const byD={}; DATA.stops.forEach((s,i)=>{ (byD[s.data]=byD[s.data]||[]).push(i); });
@@ -853,9 +1050,10 @@ function renderDock(){
     const txt = d.free ? `Livre em ${esc(shortN(st[d.to].n))}` : (k===0 ? esc(d.idx.map(i=>shortN(st[i].n)).join(' → ')) : `${esc(shortN(st[d.from].n))} → ${esc(shortN(st[d.to].n))}`);
     const nn = !d.free && d.night!=null ? (DAYS[k+1]&&DAYS[k+1].free?' · 🌙2n':' · 🌙') : '';
     const rs = resForNight(d.dt);
-    const rsTxt = rs.length ? `<small class="rsv">✅ ${esc(rs.map(r=>(byId[r.place_id]||{n:r.nome}).n).join(', '))}</small>` : '';
+    const rsTxt = rs.length ? `<small class="rsv">${rs.every(r=>isNM(r.place_id))?'☑️':'✅'} ${esc(rs.map(r=>(byId[r.place_id]||{n:r.nome}).n).join(', '))}</small>` : '';
+    const rk = rs.length&&rs.every(r=>isNM(r.place_id))?'☑️':'✅';
     const na = attrOf(d.dt).length; const atTxt = na && F.lay!=='camp' ? `<small class="atc" onclick="event.stopPropagation();dayAttr(${k})">🎡 ${na} atraç${na>1?'ões':'ão'}</small>` : '';
-    return `<div class="di${d.free?' free':''}${dockOn===k?' on':''}${d.dt===td?' td':''}" id="dk${k}" onclick="goDay(${k})"><b><span class="full">D${d.n} · ${d.dt}${nn}${rs.length?' ✅':''}</span><span class="short">${d.n}${rs.length?'✅':''}</span></b><small>${txt}</small>${rsTxt}${atTxt}</div>`;
+    return `<div class="di${d.free?' free':''}${dockOn===k?' on':''}${d.dt===td?' td':''}" id="dk${k}" onclick="goDay(${k})"><b><span class="full">D${d.n} · ${d.dt}${nn}${rs.length?' '+rk:''}</span><span class="short">${d.n}${rs.length?rk:''}</span></b><small>${txt}</small>${rsTxt}${atTxt}</div>`;
   }).join('');
 }
 function goDay(k){
@@ -883,6 +1081,8 @@ toggleDock(store.get('dockMin', window.innerWidth<700));
 (()=>{ const i=DAYS.findIndex(d=>d.dt===todayStr()); if(i>=0) setTimeout(()=>{ const e=document.getElementById('dk'+i); if(e) e.scrollIntoView({block:'center'}); },300); })();
 
 renderFilt(); renderRot(); draw(); fitRoute(); sync();
+updWxFab(); setTimeout(()=>wxLoad(),1500); setInterval(()=>wxLoad(),30*60e3);
+if(todayK()>=0 && store.get('hojeAuto','')!==todayStr()){ store.set('hojeAuto',todayStr()); setTimeout(()=>{ hojeMode='dia'; hojeK=todayK(); openTab('hoje'); },800); }
 if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 </script>
 </body>
