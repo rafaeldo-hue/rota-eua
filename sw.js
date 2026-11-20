@@ -1,5 +1,5 @@
 
-const APP='rotaeua-app-v5', TILES='rotaeua-tiles-v1';
+const APP='rotaeua-app-v6', TILES='rotaeua-tiles-v1';
 const SHELL=['./','index.html','manifest.json','icon-192.png',
  'leaflet.css','leaflet.js','MarkerCluster.css','MarkerCluster.Default.css','leaflet.markercluster.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(APP).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
