@@ -86,16 +86,35 @@ html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Seg
 .legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;margin:6px 0 4px}
 .legend span{display:flex;align-items:center;gap:5px}
 .muted{color:var(--mut);font-size:13px}
+.pill.fav.on{background:#facc15;color:#422006}
+.mk.g{border:3px solid #dc2626}
+.gb{position:absolute;left:-6px;bottom:-6px;background:#dc2626;color:#fff;border-radius:8px;font-size:9px;padding:1px 3px;border:1.5px solid #fff;line-height:1.1}
+.mk .fs{position:absolute;right:-7px;bottom:-7px;font-size:13px;text-shadow:0 0 2px #fff}
+.srm{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#db2777;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.srm span{display:block;transform:rotate(45deg);color:#fff;font-weight:800;font-size:12px;text-align:center;line-height:22px}
+.frm label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+.frm input,.frm select,.frm textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font-size:16px;background:#fff;font-family:inherit}
+.btn.red{background:#fee2e2;color:#991b1b}
+.btn.star{background:#fef9c3;color:#713f12}
+.btn.star.on{background:#facc15;color:#422006}
+.banner{position:fixed;left:10px;right:10px;top:calc(var(--safe-t) + 58px);z-index:600;background:#facc15;color:#422006;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700;display:none;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+.banner.show{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + var(--safe-b));z-index:2000;background:#14213d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="top">
   <button class="pill" id="dayPill" onclick="openTab('roteiro')">🗓️ Roteiro</button>
-  <button class="pill" onclick="openFilters()">⚙️ Filtros</button>
+  <button class="pill" onclick="openSearch()" title="Buscar na internet">🔍</button>
+  <button class="pill fav" id="favPill" onclick="toggleFavMode()" title="Só favoritos">⭐ <span id="favN">0</span></button>
+  <button class="pill" onclick="openFilters()">⚙️</button>
 </div>
+<div class="banner" id="favBanner"><span>⭐ Mostrando só os favoritos</span><button class="pill" onclick="toggleFavMode()">Mostrar tudo</button></div>
+<div class="toast" id="toast"></div>
 <div id="fabs">
   <button class="fab" id="fabLoc" onclick="toggleFollow()" title="Minha localização">📍</button>
+  <button class="fab" onclick="chooseBase()" title="Tipo de mapa">🛰️</button>
   <button class="fab" onclick="fitRoute()" title="Ver rota inteira">🗺️</button>
 </div>
 
@@ -104,6 +123,11 @@ html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Seg
   <input class="search" id="q" placeholder="Buscar pelo nome (ex.: Walmart, KOA, Zion)" oninput="renderNear()">
   <div class="seg" id="nearSeg"></div>
   <div class="muted" id="nearInfo"></div><div id="nearList"></div></div>
+<div class="panel" id="p-busca"><h2>🔍 Buscar na internet</h2>
+  <div style="display:flex;gap:8px"><input class="search" id="sq" placeholder="Ex.: RV park Bishop, Walmart Tonopah, Mono Lake" onkeydown="if(event.key==='Enter')doSearch()"><button class="btn pri" style="width:auto;padding:0 16px;margin-bottom:10px" onclick="doSearch()">Buscar</button></div>
+  <div class="seg"><button id="sbNear" class="on" onclick="sNear=true;segS()">Perto do mapa</button><button id="sbAll" onclick="sNear=false;segS()">Em qualquer lugar</button></div>
+  <div class="muted" id="sInfo">Busca no OpenStreetMap (grátis). Os resultados aparecem no mapa como alfinetes rosa 📍 e você pode adicionar ao mapa da galera.</div>
+  <div id="sList"></div></div>
 <div class="panel" id="p-avisos"><h2>Avisos importantes</h2><div id="avList"></div></div>
 <div class="panel filt" id="p-filtros"><h2>O que mostrar no mapa</h2><div id="filtList"></div>
   <p class="muted">⭐ Borda amarela = local pesquisado (preço, reserva, inverno e comentários conferidos em <span id="verTxt"></span>). Os outros vêm do OpenStreetMap e não foram conferidos um a um.</p>
@@ -135,11 +159,37 @@ const SUB = {walmart:'Walmart',casino:'Cassino',truck:'Truck stop',rest:'Rest ar
 const ST = {ok:['🟢 Pernoite liberado (relatos)','var(--ok)'],inc:['🟡 Incerto – confirme','var(--inc)'],nao:['🔴 Não permite','var(--nao)']};
 const TRIP_YEAR = d => { const [dd,mm]=d.split('/').map(Number); return new Date(mm===12?2026:2027, mm-1, dd); };
 const store = { get(k,d){ try{const v=localStorage.getItem('rotaeua_'+k); return v?JSON.parse(v):d;}catch(e){return d;} }, set(k,v){ try{localStorage.setItem('rotaeua_'+k,JSON.stringify(v));}catch(e){} } };
-let F = store.get('filters', {rv:true,pub:true,free:true,park:true,dump:true,camp:false,onlyV:false,hideNao:false});
+let F = Object.assign({rv:true,pub:true,free:true,park:true,dump:true,camp:false,onlyV:false,hideNao:false,gal:true,onlyFav:false}, store.get('filters', {}));
+// ---- planilha compartilhada (Google Apps Script) ----
+const API = 'https://script.google.com/macros/s/AKfycbyyM4Y8Nbw4AFiN39kVRNVnhrOaRTixLjDgQL5pw_r6AC3-2ST9gt_T-2VaCnOAv0j7Lw/exec';
+let GAL = store.get('galera', []);          // pontos adicionados pela galera (cache offline)
+let FAVL = store.get('favs', []);           // favoritos [{place_id,nome,autor,...}]
+let FAV = new Set(FAVL.map(f=>f.place_id));
+let QUEUE = store.get('queue', []);         // ações feitas sem internet
 let me = null, follow = false, watchId = null, meMarker = null, nearCat = 'all';
 
 const map = L.map('map',{zoomControl:false, preferCanvas:true}).setView([36.2,-115.5],6);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
+const BASES = {
+  ruas: [L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'})],
+  sat:  [L.tileLayer(ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:18,attribution:'Imagens © Esri, Maxar, Earthstar'})],
+  hib:  [L.tileLayer(ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:18,attribution:'Imagens © Esri, Maxar, Earthstar'}),
+         L.tileLayer(ESRI+'Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:18}),
+         L.tileLayer(ESRI+'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:18})]
+};
+let baseK = store.get('base','ruas'); if(!BASES[baseK]) baseK='ruas';
+BASES[baseK].forEach(l=>l.addTo(map));
+function setBase(k){
+  Object.values(BASES).flat().forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); });
+  BASES[k].forEach(l=>{ l.addTo(map); l.bringToBack && l.bringToBack(); });
+  if(k==='hib'){ BASES.hib[0].bringToBack(); }
+  baseK=k; store.set('base',k); closeSheet();
+}
+function chooseBase(){
+  const o=[['ruas','🗺️ Ruas (mapa)'],['sat','🛰️ Satélite'],['hib','🌍 Híbrido (satélite + ruas e nomes)']];
+  document.getElementById('sheetBody').innerHTML = `<h3>Tipo de mapa</h3><div class="btns" style="grid-template-columns:1fr">${o.map(([k,n])=>`<button class="btn${baseK===k?' pri':''}" onclick="setBase('${k}')">${n}</button>`).join('')}</div><p class="muted">Satélite e híbrido gastam mais internet. Sem sinal, o mapa mostra só as áreas que você já abriu antes.</p>`;
+  document.getElementById('sheet').classList.add('show');
+}
 L.polyline(DATA.route,{color:'#14213d',weight:5,opacity:.75}).addTo(map);
 L.polyline(DATA.route,{color:'#60a5fa',weight:2,opacity:.9,dashArray:'6 8'}).addTo(map);
 const routeBounds = L.latLngBounds(DATA.route);
@@ -156,13 +206,17 @@ function icon(p){
   const c = CAT[p.c]||CAT.camp;
   const dot = p.st ? `<span class="dot" style="background:${ST[p.st][1]}"></span>` : '';
   const txt = p.c==='park' ? ({walmart:'W',casino:'🎰',truck:'⛽',rest:'R',cracker:'CB',outdoor:'P'}[p.s]||'P') : c.i;
-  return L.divIcon({className:'',html:`<div class="mk${p.v?' v':''}" style="background:${c.hex};position:relative">${txt}${dot}</div>`,iconSize:p.v?[34,34]:[28,28],iconAnchor:p.v?[17,17]:[14,14]});
+  const gb = p.gl ? '<span class="gb">👥</span>' : '';
+  const fs = FAV.has(p.id) ? '<span class="fs">⭐</span>' : '';
+  return L.divIcon({className:'',html:`<div class="mk${p.v?' v':''}${p.gl?' g':''}" style="background:${c.hex};position:relative">${txt}${dot}${gb}${fs}</div>`,iconSize:p.v?[34,34]:[28,28],iconAnchor:p.v?[17,17]:[14,14]});
 }
 const cluster = L.markerClusterGroup({maxClusterRadius:40,disableClusteringAtZoom:11,showCoverageOnHover:false,chunkedLoading:true});
 const vLayer = L.markerClusterGroup({maxClusterRadius:28,disableClusteringAtZoom:9,showCoverageOnHover:false,iconCreateFunction:c=>L.divIcon({className:'',html:`<div class="mk v" style="background:#a16207">${c.getChildCount()}</div>`,iconSize:[34,34]})});
 map.addLayer(cluster); map.addLayer(vLayer);
 const markers = {};
 function visible(p){
+  if(F.onlyFav) return FAV.has(p.id);
+  if(p.gl) return F.gal;
   if(!F[p.c]) return false;
   if(F.onlyV && !p.v) return false;
   if(F.hideNao && p.st==='nao') return false;
@@ -171,15 +225,28 @@ function visible(p){
 function draw(){
   cluster.clearLayers(); vLayer.clearLayers();
   const arr=[];
-  DATA.places.forEach(p=>{
+  allPlaces().forEach(p=>{
     if(!visible(p)) return;
+    const key = p.id+(FAV.has(p.id)?'*':'');
     let m = markers[p.id];
-    if(!m){ m = L.marker([p.lat,p.lon],{icon:icon(p),zIndexOffset:p.v?1000:0}); m.on('click',()=>openPlace(p.id)); markers[p.id]=m; }
-    if(p.v) vLayer.addLayer(m); else arr.push(m);
+    if(!m || m._k!==key){ m = L.marker([p.lat,p.lon],{icon:icon(p),zIndexOffset:p.v||p.gl?1000:0}); m._k=key; m.on('click',()=>openPlace(p.id)); markers[p.id]=m; }
+    if(p.v||p.gl||F.onlyFav) vLayer.addLayer(m); else arr.push(m);
   });
+  document.getElementById('favN').textContent = FAV.size;
+  document.getElementById('favPill').classList.toggle('on',F.onlyFav);
+  document.getElementById('favBanner').classList.toggle('show',F.onlyFav);
   cluster.addLayers(arr);
 }
 const byId = {}; DATA.places.forEach(p=>byId[p.id]=p);
+function galToPlace(g){
+  const c = CAT[g.categoria] ? g.categoria : 'camp';
+  return {id:g.id, gl:1, v:0, n:g.nome, c, lat:+g.lat, lon:+g.lon, p:g.preco||null, ad:g.endereco||null, l:g.link||null,
+          o:g.obs?[g.obs]:[], autor:g.autor, quando:String(g.criado_em||'').slice(0,10)};
+}
+let GALP = [];
+function rebuildGal(){ GALP.forEach(p=>delete byId[p.id]); GALP = GAL.map(galToPlace).filter(p=>isFinite(p.lat)&&isFinite(p.lon)); GALP.forEach(p=>byId[p.id]=p); }
+function allPlaces(){ return GALP.length ? DATA.places.concat(GALP) : DATA.places; }
+rebuildGal();
 
 function km(a,b,c,d){const R=6371,t=Math.PI/180,x=Math.sin((c-a)*t/2)**2+Math.cos(a*t)*Math.cos(c*t)*Math.sin((d-b)*t/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -191,7 +258,9 @@ function openPlace(id, fly){
   const c = CAT[p.c]||CAT.camp;
   let b = `<span class="b" style="background:${c.hex}">${c.n}${p.s&&SUB[p.s]?' · '+SUB[p.s]:''}</span>`;
   if(p.st) b += `<span class="b" style="background:${ST[p.st][1]}">${ST[p.st][0]}</span>`;
-  if(p.v) b += `<span class="b" style="background:#a16207">⭐ Pesquisado</span>`; else if(p.dy) b+=`<span class="b lt">Dados do The Dyrt (nov/2026)</span>`; else b+=`<span class="b lt">Dados do mapa (não conferido)</span>`;
+  if(p.gl) b += `<span class="b" style="background:#dc2626">👥 Adicionado pela galera${p.autor?' · '+esc(p.autor):''}${p.quando?' · '+fmtD(p.quando):''}</span>`;
+  if(FAV.has(p.id)) b += `<span class="b" style="background:#facc15;color:#422006">⭐ Favorito</span>`;
+  if(p.gl) {} else if(p.v) b += `<span class="b" style="background:#a16207">⭐ Pesquisado</span>`; else if(p.dy) b+=`<span class="b lt">Dados do The Dyrt (nov/2026)</span>`; else b+=`<span class="b lt">Dados do mapa (não conferido)</span>`;
   if(p.p) b += `<span class="b lt">💲 ${esc(p.p)}</span>`;
   let dist = me ? `${km(me[0],me[1],p.lat,p.lon).toFixed(1)} km em linha reta` : (p.k!=null?`${p.k} km da rota`:'');
   let h = `<h3>${esc(p.n)}</h3><div class="badges">${b}</div><div class="rows">`+
@@ -200,6 +269,7 @@ function openPlace(id, fly){
   if(p.o&&p.o.length) h += `<ul class="notes">${p.o.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   if(p.f&&p.f.length) h += `<div class="src">Fontes: ${esc(p.f.join(' · '))}${p.v?' – conferido em '+DATA.ver:''}</div>`;
   const ll = `${p.lat},${p.lon}`;
+  h += `<div class="btns"><button class="btn star${FAV.has(p.id)?' on':''}" style="grid-column:1/-1" onclick="toggleFav('${p.id}')">${FAV.has(p.id)?'⭐ Favorito (tocar para tirar)':'☆ Adicionar aos favoritos'}</button></div>`;
   h += `<div class="btns">
     <a class="btn pri" href="https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving" target="_blank" rel="noopener">🧭 Ir com Google Maps</a>
     <a class="btn" href="https://maps.apple.com/?daddr=${ll}&dirflg=d" target="_blank" rel="noopener">Apple Maps</a>
@@ -207,6 +277,7 @@ function openPlace(id, fly){
     ${p.l?`<a class="btn" href="${esc(p.l)}" target="_blank" rel="noopener">🌐 Site / reservar</a>`:''}
     ${p.tel?`<a class="btn" href="tel:${esc(p.tel)}">📞 Ligar</a>`:''}
     <a class="btn" href="googlechromes://www.google.com/search?q=${encodeURIComponent(p.n+' RV')}">🔎 Pesquisar no Chrome</a>
+    ${p.gl?`<button class="btn red" onclick="removeGal('${p.id}')">🗑️ Remover do mapa da galera</button>`:''}
   </div>`;
   if(p.rv&&p.rv.length){
     h = h.replace('<div class="btns">', `<button class="btn rvbtn" onclick="showRev('${p.id}')">💬 Comentários recentes (${p.rv.length}) – em português</button><div class="btns">`);
@@ -238,13 +309,13 @@ function showStop(i){
 function itemHTML(p){
   const c = CAT[p.c]||CAT.camp;
   const st = p.st?` · ${ST[p.st][0]}`:'';
-  return `<div class="it" onclick="openPlace('${p.id}',true)"><div class="mk${p.v?' v':''}" style="background:${c.hex}">${p.c==='park'?'P':c.i}</div><div class="t"><b>${esc(p.n)}</b><span>${[p.p,p.h].filter(x=>x&&x!=='—').map(esc).join(' · ')}${st}</span></div><div>›</div></div>`;
+  return `<div class="it" onclick="openPlace('${p.id}',true)"><div class="mk${p.v?' v':''}${p.gl?' g':''}" style="background:${c.hex}">${p.c==='park'?'P':c.i}</div><div class="t"><b>${FAV.has(p.id)?'⭐ ':''}${p.gl?'👥 ':''}${esc(p.n)}</b><span>${[p.p,p.h].filter(x=>x&&x!=='—').map(esc).join(' · ')}${st}</span></div><div>›</div></div>`;
 }
 
 // tabs
 function openTab(t){
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
-  ['roteiro','perto','avisos','filtros'].forEach(x=>document.getElementById('p-'+x).classList.toggle('show',x===t));
+  ['roteiro','perto','avisos','filtros','busca'].forEach(x=>document.getElementById('p-'+x).classList.toggle('show',x===t));
   closeSheet();
   if(t==='perto') renderNear();
   if(t==='mapa') setTimeout(()=>map.invalidateSize(),50);
@@ -284,13 +355,15 @@ function flyStop(i){ const s=DATA.stops[i]; openTab('mapa'); map.setView([s.lat,
 // perto
 function renderNear(){
   const seg = document.getElementById('nearSeg');
-  const opts = [['all','Todos'],['free','Grátis'],['park','Estacionar'],['pub','Públicos'],['rv','RV parks'],['dump','Dump']];
+  const opts = [['all','Todos'],['fav','⭐ Favoritos'],['gal','👥 Galera'],['free','Grátis'],['park','Estacionar'],['pub','Públicos'],['rv','RV parks'],['dump','Dump']];
   seg.innerHTML = opts.map(([k,n])=>`<button class="${nearCat===k?'on':''}" onclick="nearCat='${k}';renderNear()">${n}</button>`).join('');
   const q = document.getElementById('q').value.trim().toLowerCase();
   const ref = me || [map.getCenter().lat, map.getCenter().lng];
   document.getElementById('nearInfo').textContent = me ? 'Distância em linha reta a partir de você.' : 'GPS desligado – distâncias a partir do centro do mapa. Toque em 📍 no mapa para ativar.';
-  let arr = DATA.places.filter(p=>visible(p) || q);
-  if(nearCat!=='all') arr = arr.filter(p=>p.c===nearCat);
+  let arr = allPlaces().filter(p=>visible(p) || q || nearCat==='fav' || nearCat==='gal');
+  if(nearCat==='fav') arr = arr.filter(p=>FAV.has(p.id));
+  else if(nearCat==='gal') arr = arr.filter(p=>p.gl);
+  else if(nearCat!=='all') arr = arr.filter(p=>p.c===nearCat);
   if(q) arr = arr.filter(p=>p.n.toLowerCase().includes(q));
   arr = arr.map(p=>[km(ref[0],ref[1],p.lat,p.lon),p]).sort((a,b)=>a[0]-b[0]).slice(0,60);
   document.getElementById('nearList').innerHTML = arr.map(([d,p])=>itemHTML(p).replace('<div>›</div>',`<div class="muted">${d<10?d.toFixed(1):Math.round(d)} km</div>`)).join('') || '<p class="muted">Nada encontrado.</p>';
@@ -304,6 +377,8 @@ document.getElementById('avList').innerHTML = DATA.avisos.map(a=>`<div class="ca
 function renderFilt(){
   const items = Object.entries(CAT).map(([k,c])=>`<label><input type="checkbox" ${F[k]?'checked':''} onchange="F['${k}']=this.checked;saveF()"><span class="mk" style="background:${c.hex}">${c.i}</span><span>${c.n} <span class="muted">(${DATA.places.filter(p=>p.c===k).length})</span>${k==='park'?'<br><span class="muted">W Walmart · 🎰 Cassino · ⛽ Truck stop · R Rest area · CB Cracker Barrel</span>':''}</span></label>`).join('');
   document.getElementById('filtList').innerHTML = items +
+   `<label><input type="checkbox" ${F.gal?'checked':''} onchange="F.gal=this.checked;saveF()"><span class="mk g" style="background:#64748b;position:relative">👥</span><span>Pontos adicionados pela galera <span class="muted">(${GALP.length})</span></span></label>`+
+   `<label><input type="checkbox" ${F.onlyFav?'checked':''} onchange="F.onlyFav=this.checked;saveF()">⭐ Só favoritos (${FAV.size})</label>`+
    `<label><input type="checkbox" ${F.onlyV?'checked':''} onchange="F.onlyV=this.checked;saveF()">⭐ Só locais pesquisados</label>`+
    `<label><input type="checkbox" ${F.hideNao?'checked':''} onchange="F.hideNao=this.checked;saveF()">Esconder estacionamentos que proíbem</label>`;
   document.getElementById('legend').innerHTML = `<span><span class="mk v" style="background:#2563eb;width:28px;height:28px">RV</span>Borda amarela = pesquisado</span>` + Object.values(ST).map(s=>`<span><span class="sw" style="background:${s[1]}"></span>${s[0].replace(/^\S+ /,'')}</span>`).join('') + `<span class="muted" style="width:100%">A bolinha colorida no canto do ícone mostra se o estacionamento permite pernoite.</span>`;
@@ -332,7 +407,147 @@ map.on('dragstart',()=>{ if(follow){ follow=false; document.getElementById('fabL
 function alertBox(t){ document.getElementById('sheetBody').innerHTML = `<h3>Aviso</h3><p>${esc(t)}</p>`; document.getElementById('sheet').classList.add('show'); }
 function fitRoute(){ map.fitBounds(routeBounds,{padding:[20,20]}); }
 
-renderFilt(); renderRot(); draw(); fitRoute();
+
+// ================= favoritos / galera / busca =================
+function toast(t,ms){ const e=document.getElementById('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>e.style.display='none',ms||2600); }
+function who(){ return store.get('autor',''); }
+function needId(){
+  let a = who(), c = store.get('code','');
+  if(!a){ a = (prompt('Seu nome ou apelido (aparece para a galera):')||'').trim(); if(!a) return null; store.set('autor',a); }
+  if(!c){ c = (prompt('Código da viagem (para poder adicionar e marcar favoritos):')||'').trim(); if(!c) return null; store.set('code',c); }
+  return {autor:a, code:c};
+}
+async function apiPost(body){
+  if(!API || API.startsWith('__')) throw new Error('servidor');
+  const r = await fetch(API,{method:'POST',body:JSON.stringify(body)});
+  const j = await r.json();
+  if(!j.ok){ if(j.erro==='codigo'){ store.set('code',''); } throw new Error(j.erro||'erro'); }
+  return j;
+}
+async function send(body){
+  try{ const j = await apiPost(body); return j; }
+  catch(e){
+    if(e.message==='codigo'){ toast('Código da viagem errado. Tente de novo.',4000); throw e; }
+    if(e.message==='servidor'){ toast('Servidor da planilha ainda não configurado.',4000); throw e; }
+    QUEUE.push(body); store.set('queue',QUEUE); toast('Sem internet: vou enviar quando voltar o sinal.',3500); return {ok:true,queued:true};
+  }
+}
+async function flushQueue(){
+  if(!QUEUE.length) return;
+  const q=[...QUEUE]; QUEUE=[]; store.set('queue',QUEUE);
+  for(const b of q){ try{ await apiPost(b); }catch(e){ if(e.message!=='codigo'){ QUEUE.push(b); } } }
+  store.set('queue',QUEUE);
+}
+async function sync(){
+  if(!API || API.startsWith('__')) return;
+  try{
+    await flushQueue();
+    const r = await fetch(API+'?t='+Date.now()); const j = await r.json();
+    if(!j.ok) return;
+    GAL = j.pontos||[]; FAVL = j.favoritos||[];
+    // ações ainda na fila continuam valendo localmente
+    QUEUE.forEach(b=>{ if(b.action==='fav') FAVL.push({place_id:b.id,nome:b.nome,autor:b.autor}); if(b.action==='unfav') FAVL=FAVL.filter(f=>f.place_id!==b.id); if(b.action==='add') GAL.push(Object.assign({id:b.tmp,criado_em:new Date().toISOString()},b)); if(b.action==='remove') GAL=GAL.filter(g=>g.id!==b.id); });
+    store.set('galera',GAL); store.set('favs',FAVL);
+    FAV = new Set(FAVL.map(f=>f.place_id)); rebuildGal(); draw(); renderFilt();
+  }catch(e){}
+}
+async function toggleFav(id){
+  const p = byId[id]; if(!p) return;
+  const idn = needId(); if(!idn) return;
+  const on = !FAV.has(id);
+  if(on){ FAV.add(id); FAVL.push({place_id:id,nome:p.n,autor:idn.autor}); } else { FAV.delete(id); FAVL=FAVL.filter(f=>f.place_id!==id); }
+  store.set('favs',FAVL); draw(); openPlace(id);
+  try{ await send({action:on?'fav':'unfav', id, nome:p.n, ll:p.lat+','+p.lon, autor:idn.autor, code:idn.code}); toast(on?'⭐ Favorito salvo para a galera':'Removido dos favoritos'); }
+  catch(e){ if(on) FAV.delete(id); else FAV.add(id); draw(); openPlace(id); }
+}
+function toggleFavMode(){
+  if(!F.onlyFav && !FAV.size){ toast('Nenhum favorito ainda. Abra um lugar e toque em ☆ Adicionar aos favoritos.',4000); return; }
+  F.onlyFav = !F.onlyFav; saveF(); renderFilt();
+  if(F.onlyFav){ const pts=allPlaces().filter(p=>FAV.has(p.id)); if(pts.length) map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[40,40],maxZoom:12}); }
+  openTab('mapa');
+}
+async function removeGal(id){
+  const p = byId[id]; if(!p) return;
+  if(!confirm('Remover "'+p.n+'" do mapa da galera para todo mundo?')) return;
+  const idn = needId(); if(!idn) return;
+  try{ await send({action:'remove', id, autor:idn.autor, code:idn.code}); GAL = GAL.filter(g=>g.id!==id); store.set('galera',GAL); rebuildGal(); draw(); closeSheet(); toast('Removido.'); }catch(e){}
+}
+
+// ---- busca ----
+let sNear = true, SR = [];
+const sLayer = L.layerGroup().addTo(map);
+function openSearch(){ openTab('busca'); document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('act')); setTimeout(()=>document.getElementById('sq').focus(),100); }
+function segS(){ document.getElementById('sbNear').classList.toggle('on',sNear); document.getElementById('sbAll').classList.toggle('on',!sNear); }
+const OSMT = {caravan_site:'RV park / camping',camp_site:'Camping',parking:'Estacionamento',fuel:'Posto',supermarket:'Supermercado',department_store:'Loja',sanitary_dump_station:'Dump',casino:'Cassino',restaurant:'Restaurante',fast_food:'Lanchonete',hotel:'Hotel',motel:'Motel',attraction:'Atração',viewpoint:'Mirante',city:'Cidade',town:'Cidade',village:'Vila',national_park:'Parque nacional',park:'Parque',water_point:'Água',drinking_water:'Água potável',toilets:'Banheiro',rest_area:'Área de descanso',services:'Área de serviço',laundry:'Lavanderia',propane:'Propano'};
+function guessCat(r){ const v=r.v, n=(r.n||'').toLowerCase();
+  if(v==='sanitary_dump_station'||v==='water_point') return 'dump';
+  if(v==='caravan_site'||/rv park|rv resort|koa/.test(n)) return 'rv';
+  if(v==='camp_site') return 'pub';
+  if(['parking','fuel','supermarket','department_store','casino','rest_area','services'].includes(v)||/walmart|cracker barrel|casino|pilot|flying j|love'?s/.test(n)) return 'park';
+  return 'camp'; }
+async function doSearch(){
+  const q = document.getElementById('sq').value.trim(); if(!q) return;
+  const info = document.getElementById('sInfo'); info.textContent = 'Buscando…';
+  const c = me ? {lat:me[0],lng:me[1]} : map.getCenter();
+  let url = 'https://photon.komoot.io/api/?limit=20&lang=en&q='+encodeURIComponent(q);
+  if(sNear) url += `&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}&location_bias_scale=0.3`;
+  try{
+    const j = await (await fetch(url)).json();
+    SR = (j.features||[]).map((f,i)=>{ const pr=f.properties, [lon,lat]=f.geometry.coordinates;
+      const ad=[pr.housenumber&&pr.street?pr.housenumber+' '+pr.street:pr.street, pr.city||pr.town||pr.village, pr.state].filter(Boolean).join(', ');
+      return {i, n:pr.name||ad||q, lat, lon, v:pr.osm_value, k:pr.osm_key, ad, oid:(pr.osm_type||'')+(pr.osm_id||''), d:km(c.lat,c.lng,lat,lon)}; })
+      .filter(r=>r.lat>24&&r.lat<50&&r.lon>-125&&r.lon<-66);
+    if(sNear) SR.sort((a,b)=>a.d-b.d);
+    info.textContent = SR.length ? `${SR.length} resultado(s). Toque para ver no mapa.` : 'Nada encontrado nos EUA. Tente outro nome ou "Em qualquer lugar".';
+    drawSR();
+    document.getElementById('sList').innerHTML = SR.map(r=>`<div class="it" onclick="showSR(${r.i},true)"><div class="srm"><span>${r.i+1}</span></div><div class="t"><b>${esc(r.n)}</b><span>${esc(OSMT[r.v]||r.v||'')}${r.ad?' · '+esc(r.ad):''}</span></div><div class="muted">${r.d<10?r.d.toFixed(1):Math.round(r.d)} km</div></div>`).join('') +
+      (SR.length?`<div class="btns"><button class="btn" onclick="clearSR()">Limpar resultados do mapa</button><button class="btn pri" style="grid-column:auto" onclick="openTab('mapa');fitSR()">Ver todos no mapa</button></div>`:'');
+  }catch(e){ info.textContent = 'Não consegui buscar (sem internet?).'; }
+}
+function drawSR(){ sLayer.clearLayers(); SR.forEach(r=>{ L.marker([r.lat,r.lon],{zIndexOffset:4000,icon:L.divIcon({className:'',html:`<div class="srm"><span>${r.i+1}</span></div>`,iconSize:[26,26],iconAnchor:[13,26]})}).addTo(sLayer).on('click',()=>showSR(r.i)); }); }
+function fitSR(){ if(SR.length) map.fitBounds(L.latLngBounds(SR.map(r=>[r.lat,r.lon])),{padding:[40,40],maxZoom:13}); }
+function clearSR(){ SR=[]; sLayer.clearLayers(); document.getElementById('sList').innerHTML=''; document.getElementById('sInfo').textContent='Resultados apagados.'; }
+function showSR(i, fly){
+  const r = SR[i]; if(!r) return;
+  if(fly){ openTab('mapa'); map.setView([r.lat,r.lon],Math.max(map.getZoom(),14)); }
+  const ll = `${r.lat},${r.lon}`;
+  const near = allPlaces().filter(p=>km(p.lat,p.lon,r.lat,r.lon)<0.3).slice(0,3);
+  let h = `<h3>${esc(r.n)}</h3><div class="badges"><span class="b" style="background:#db2777">📍 Resultado da busca</span><span class="b lt">${esc(OSMT[r.v]||r.v||'')}</span></div><div class="rows">${row('Endereço',r.ad)}${row('Distância',(r.d<10?r.d.toFixed(1):Math.round(r.d))+' km')}</div>`;
+  if(near.length) h += `<p class="muted">Já existe no mapa perto daqui:</p>`+near.map(itemHTML).join('');
+  h += `<div class="btns"><button class="btn pri" onclick="addForm(${i})">➕ Adicionar ao mapa da galera</button>
+    <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving" target="_blank" rel="noopener">🧭 Google Maps</a>
+    <a class="btn" href="googlechromes://www.google.com/search?q=${encodeURIComponent(r.n+' '+(r.ad||'')+' RV')}">🔎 Pesquisar no Chrome</a></div>`;
+  document.getElementById('sheetBody').innerHTML = h; document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
+}
+function addForm(i){
+  const r = SR[i]; const gc = guessCat(r);
+  const opts = Object.entries(CAT).map(([k,c])=>`<option value="${k}" ${k===gc?'selected':''}>${c.n}</option>`).join('');
+  document.getElementById('sheetBody').innerHTML = `<h3>➕ Adicionar ao mapa da galera</h3><div class="frm">
+    <label>Nome</label><input id="fN" value="${esc(r.n)}">
+    <label>Tipo</label><select id="fC">${opts}</select>
+    <label>Preço (se souber)</label><input id="fP" placeholder="Ex.: Grátis, US$ 45/noite">
+    <label>Observação</label><textarea id="fO" rows="3" placeholder="Ex.: dormimos aqui, tranquilo; tem dump"></textarea>
+    <label>Seu nome</label><input id="fA" value="${esc(who())}" placeholder="Aparece para todos">
+  </div><div class="btns"><button class="btn" onclick="showSR(${i})">Cancelar</button><button class="btn pri" style="grid-column:auto" onclick="submitAdd(${i})">Salvar para todos</button></div>`;
+}
+async function submitAdd(i){
+  const r = SR[i]; const a = document.getElementById('fA').value.trim();
+  if(a) store.set('autor',a);
+  const idn = needId(); if(!idn) return;
+  const body = {action:'add', nome:document.getElementById('fN').value.trim()||r.n, categoria:document.getElementById('fC').value, preco:document.getElementById('fP').value.trim(),
+    obs:document.getElementById('fO').value.trim(), lat:r.lat, lon:r.lon, endereco:r.ad, link:r.oid?`https://www.openstreetmap.org/${r.oid.replace(/^N/,'node/').replace(/^W/,'way/').replace(/^R/,'relation/')}`:'', autor:idn.autor, code:idn.code, tmp:'tmp'+Date.now()};
+  try{
+    const j = await send(body);
+    const g = Object.assign({id:j.id||body.tmp, criado_em:new Date().toISOString()}, body);
+    GAL.push(g); store.set('galera',GAL); rebuildGal(); draw(); renderFilt();
+    sLayer.clearLayers(); toast('👥 Adicionado ao mapa da galera!'); openPlace(g.id);
+  }catch(e){}
+}
+window.addEventListener('online', sync);
+setInterval(()=>{ if(document.visibilityState==='visible') sync(); }, 120000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') sync(); });
+
+renderFilt(); renderRot(); draw(); fitRoute(); sync();
 if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 </script>
 </body>
