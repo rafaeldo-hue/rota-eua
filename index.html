@@ -308,6 +308,8 @@ function allPlaces(){ return GALP.length ? DATA.places.concat(GALP) : DATA.place
 rebuildGal();
 
 function km(a,b,c,d){const R=6371,t=Math.PI/180,x=Math.sin((c-a)*t/2)**2+Math.cos(a*t)*Math.cos(c*t)*Math.sin((d-b)*t/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+const IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function gLink(u){ return IOS ? u.replace(/^https:/,'googlechromes:') : u; }
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function row(k,v){ return v?`<div class="row"><div class="k">${k}</div><div>${esc(v)}</div></div>`:''; }
 
@@ -339,7 +341,7 @@ function openPlace(id, fly){
     <a class="btn" href="https://waze.com/ul?ll=${ll}&navigate=yes" target="_blank" rel="noopener">Waze</a>
     ${p.l?`<a class="btn" href="${esc(p.l)}" target="_blank" rel="noopener">🌐 Site / reservar</a>`:''}
     ${p.tel?`<a class="btn" href="tel:${esc(p.tel)}">📞 Ligar</a>`:''}
-    <a class="btn" href="googlechromes://www.google.com/search?q=${encodeURIComponent(p.n+' RV')}">🔎 Pesquisar no Chrome</a>
+    <a class="btn" href="${gLink('https://www.google.com/search?q='+encodeURIComponent(p.n+' RV'))}" target="_blank" rel="noopener">🔎 Pesquisar no Google</a>
     ${p.gl?`<button class="btn red" onclick="removeGal('${p.id}')">🗑️ Remover do mapa da galera</button>`:''}
   </div>`;
   if(p.rv&&p.rv.length){
@@ -354,7 +356,7 @@ function showRev(id){
   const stars=s=>s?'★'.repeat(+s)+'☆'.repeat(5-+s):'';
   let h=`<h3>💬 ${esc(p.n)}</h3><div class="muted">Últimos comentários de viajantes (mais recentes primeiro), ${p.mt?'traduzidos automaticamente do inglês – pode haver pequenos erros':'resumidos e traduzidos'}. Fonte: ${esc(src||'')}${avg?` · nota média ${esc(avg)} (${esc(n)} avaliações)`:''}.</div>`;
   h+=p.rv.map(([d,s,t])=>`<div class="rev"><div class="rh"><b>${fmtD(d)}</b><span class="st">${stars(s)}</span></div><div>${esc(t)}</div></div>`).join('');
-  h+=`<div class="btns"><button class="btn" onclick="openPlace('${p.id}')">← Voltar</button>${url?`<a class="btn" href="${esc(url.replace(/^https:/,'googlechromes:'))}">Ver todos no Chrome</a>`:''}</div>`;
+  h+=`<div class="btns"><button class="btn" onclick="openPlace('${p.id}')">← Voltar</button>${url?`<a class="btn" href="${esc(gLink(url))}" target="_blank" rel="noopener">Ver todos os comentários</a>`:''}</div>`;
   document.getElementById('sheetBody').innerHTML=h; document.getElementById('sheet').scrollTop=0;
 }
 function fmtD(d){ if(!/^\d{4}-\d{2}/.test(d)) return d; const [y,m,dd]=d.split('-'); const M=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][+m-1]; return (dd?(+dd)+' ':'')+M+'/'+y; }
@@ -382,7 +384,7 @@ function openAttr(id, fly){
     <a class="btn" href="https://maps.apple.com/?daddr=${ll}&dirflg=d" target="_blank" rel="noopener">Apple Maps</a>
     <a class="btn" href="https://waze.com/ul?ll=${ll}&navigate=yes" target="_blank" rel="noopener">Waze</a>
     ${a.l?`<a class="btn" href="${esc(a.l)}" target="_blank" rel="noopener">🌐 Site oficial</a>`:''}
-    <a class="btn" href="googlechromes://www.google.com/search?q=${encodeURIComponent(a.n+' reviews')}">🔎 Mais avaliações (Google)</a>
+    <a class="btn" href="${gLink('https://www.google.com/search?q='+encodeURIComponent(a.n+' reviews'))}" target="_blank" rel="noopener">🔎 Mais avaliações (Google)</a>
   </div>`;
   document.getElementById('sheetBody').innerHTML=h; document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
 }
@@ -635,7 +637,7 @@ function showSR(i, fly){
   if(near.length) h += `<p class="muted">Já existe no mapa perto daqui:</p>`+near.map(itemHTML).join('');
   h += `<div class="btns"><button class="btn pri" onclick="addForm(${i})">➕ Adicionar ao mapa da galera</button>
     <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving" target="_blank" rel="noopener">🧭 Google Maps</a>
-    <a class="btn" href="googlechromes://www.google.com/search?q=${encodeURIComponent(r.n+' '+(r.ad||'')+' RV')}">🔎 Pesquisar no Chrome</a></div>`;
+    <a class="btn" href="${gLink('https://www.google.com/search?q='+encodeURIComponent(r.n+' '+(r.ad||'')+' RV'))}" target="_blank" rel="noopener">🔎 Pesquisar no Google</a></div>`;
   document.getElementById('sheetBody').innerHTML = h; document.getElementById('sheet').scrollTop=0; document.getElementById('sheet').classList.add('show');
 }
 function addForm(i){
