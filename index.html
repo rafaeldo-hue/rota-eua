@@ -123,7 +123,7 @@ html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Seg
   <input class="search" id="q" placeholder="Buscar pelo nome (ex.: Walmart, KOA, Zion)" oninput="renderNear()">
   <div class="seg" id="nearSeg"></div>
   <div class="muted" id="nearInfo"></div><div id="nearList"></div></div>
-<div class="panel" id="p-busca"><h2>🔍 Buscar na internet</h2>
+<div class="panel" id="p-busca"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:4px 0 12px">🔍 Buscar na internet</h2><button class="pill" style="background:#eee;box-shadow:none;flex:none" onclick="openTab('mapa')">✕ Fechar</button></div>
   <div style="display:flex;gap:8px"><input class="search" id="sq" placeholder="Ex.: RV park Bishop, Walmart Tonopah, Mono Lake" onkeydown="if(event.key==='Enter')doSearch()"><button class="btn pri" style="width:auto;padding:0 16px;margin-bottom:10px" onclick="doSearch()">Buscar</button></div>
   <div class="seg"><button id="sbNear" class="on" onclick="sNear=true;segS()">Perto do mapa</button><button id="sbAll" onclick="sNear=false;segS()">Em qualquer lugar</button></div>
   <div class="muted" id="sInfo">Busca no OpenStreetMap (grátis). Os resultados aparecem no mapa como alfinetes rosa 📍 e você pode adicionar ao mapa da galera.</div>
