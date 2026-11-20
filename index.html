@@ -129,7 +129,8 @@ html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Seg
   <div class="muted" id="sInfo">Busca no OpenStreetMap (grátis). Os resultados aparecem no mapa como alfinetes rosa 📍 e você pode adicionar ao mapa da galera.</div>
   <div id="sList"></div></div>
 <div class="panel" id="p-avisos"><h2>Avisos importantes</h2><div id="avList"></div></div>
-<div class="panel filt" id="p-filtros"><h2>O que mostrar no mapa</h2><div id="filtList"></div>
+<div class="panel filt" id="p-filtros"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:4px 0 12px">O que mostrar no mapa</h2><button class="pill" style="background:#eee;box-shadow:none;flex:none" onclick="openTab('mapa')">✕ Fechar</button></div><div id="filtList"></div>
+  <div class="btns" style="grid-template-columns:1fr"><button class="btn pri" onclick="openTab('mapa')">🗺️ Ver no mapa</button></div>
   <p class="muted">⭐ Borda amarela = local pesquisado (preço, reserva, inverno e comentários conferidos em <span id="verTxt"></span>). Os outros vêm do OpenStreetMap e não foram conferidos um a um.</p>
   <div class="legend" id="legend"></div>
 </div>
@@ -378,7 +379,7 @@ function renderFilt(){
   const items = Object.entries(CAT).map(([k,c])=>`<label><input type="checkbox" ${F[k]?'checked':''} onchange="F['${k}']=this.checked;saveF()"><span class="mk" style="background:${c.hex}">${c.i}</span><span>${c.n} <span class="muted">(${DATA.places.filter(p=>p.c===k).length})</span>${k==='park'?'<br><span class="muted">W Walmart · 🎰 Cassino · ⛽ Truck stop · R Rest area · CB Cracker Barrel</span>':''}</span></label>`).join('');
   document.getElementById('filtList').innerHTML = items +
    `<label><input type="checkbox" ${F.gal?'checked':''} onchange="F.gal=this.checked;saveF()"><span class="mk g" style="background:#64748b;position:relative">👥</span><span>Pontos adicionados pela galera <span class="muted">(${GALP.length})</span></span></label>`+
-   `<label><input type="checkbox" ${F.onlyFav?'checked':''} onchange="F.onlyFav=this.checked;saveF()">⭐ Só favoritos (${FAV.size})</label>`+
+   `<label><input type="checkbox" ${F.onlyFav?'checked':''} onchange="if(this.checked&&!FAV.size){this.checked=false;toast('Você ainda não tem favoritos. Abra um lugar no mapa e toque em ☆ Adicionar aos favoritos.',4500);return;} F.onlyFav=this.checked;saveF()">⭐ Só favoritos (${FAV.size})${F.onlyFav?' <span class=\'muted\'>– ligado: o mapa mostra só os favoritos</span>':''}</label>`+
    `<label><input type="checkbox" ${F.onlyV?'checked':''} onchange="F.onlyV=this.checked;saveF()">⭐ Só locais pesquisados</label>`+
    `<label><input type="checkbox" ${F.hideNao?'checked':''} onchange="F.hideNao=this.checked;saveF()">Esconder estacionamentos que proíbem</label>`;
   document.getElementById('legend').innerHTML = `<span><span class="mk v" style="background:#2563eb;width:28px;height:28px">RV</span>Borda amarela = pesquisado</span>` + Object.values(ST).map(s=>`<span><span class="sw" style="background:${s[1]}"></span>${s[0].replace(/^\S+ /,'')}</span>`).join('') + `<span class="muted" style="width:100%">A bolinha colorida no canto do ícone mostra se o estacionamento permite pernoite.</span>`;
@@ -412,10 +413,24 @@ function fitRoute(){ map.fitBounds(routeBounds,{padding:[20,20]}); }
 function toast(t,ms){ const e=document.getElementById('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>e.style.display='none',ms||2600); }
 function who(){ return store.get('autor',''); }
 function needId(){
-  let a = who(), c = store.get('code','');
-  if(!a){ a = (prompt('Seu nome ou apelido (aparece para a galera):')||'').trim(); if(!a) return null; store.set('autor',a); }
-  if(!c){ c = (prompt('Código da viagem (para poder adicionar e marcar favoritos):')||'').trim(); if(!c) return null; store.set('code',c); }
-  return {autor:a, code:c};
+  const a = who(), c = store.get('code','');
+  if(a && c) return Promise.resolve({autor:a, code:c});
+  return new Promise(res=>{
+    needId._res = res;
+    document.getElementById('sheetBody').innerHTML = `<h3>Quem é você?</h3><p class="muted">Só na primeira vez. O nome aparece para a galera junto com o que você adicionar.</p><div class="frm">
+      <label>Seu nome ou apelido</label><input id="idA" value="${esc(a)}" autocomplete="name">
+      <label>Código da viagem</label><input id="idC" value="${esc(c)}" autocapitalize="off" autocomplete="off">
+      </div><div class="btns"><button class="btn" onclick="idDone(false)">Cancelar</button><button class="btn pri" style="grid-column:auto" onclick="idDone(true)">Continuar</button></div>`;
+    document.getElementById('sheet').classList.add('show');
+    setTimeout(()=>document.getElementById(a?'idC':'idA').focus(),100);
+  });
+}
+function idDone(ok){
+  const r = needId._res; needId._res = null; if(!r) return;
+  if(!ok){ closeSheet(); toast('Cancelado – nada foi salvo.'); r(null); return; }
+  const a = document.getElementById('idA').value.trim(), c = document.getElementById('idC').value.trim();
+  if(!a || !c){ toast('Preencha o nome e o código.'); needId._res = r; return; }
+  store.set('autor',a); store.set('code',c); r({autor:a, code:c});
 }
 async function apiPost(body){
   if(!API || API.startsWith('__')) throw new Error('servidor');
@@ -427,7 +442,7 @@ async function apiPost(body){
 async function send(body){
   try{ const j = await apiPost(body); return j; }
   catch(e){
-    if(e.message==='codigo'){ toast('Código da viagem errado. Tente de novo.',4000); throw e; }
+    if(e.message==='codigo'){ toast('Código da viagem errado – nada foi salvo. Tente de novo.',4500); throw e; }
     if(e.message==='servidor'){ toast('Servidor da planilha ainda não configurado.',4000); throw e; }
     QUEUE.push(body); store.set('queue',QUEUE); toast('Sem internet: vou enviar quando voltar o sinal.',3500); return {ok:true,queued:true};
   }
@@ -448,12 +463,12 @@ async function sync(){
     // ações ainda na fila continuam valendo localmente
     QUEUE.forEach(b=>{ if(b.action==='fav') FAVL.push({place_id:b.id,nome:b.nome,autor:b.autor}); if(b.action==='unfav') FAVL=FAVL.filter(f=>f.place_id!==b.id); if(b.action==='add') GAL.push(Object.assign({id:b.tmp,criado_em:new Date().toISOString()},b)); if(b.action==='remove') GAL=GAL.filter(g=>g.id!==b.id); });
     store.set('galera',GAL); store.set('favs',FAVL);
-    FAV = new Set(FAVL.map(f=>f.place_id)); rebuildGal(); draw(); renderFilt();
+    FAV = new Set(FAVL.map(f=>f.place_id)); if(F.onlyFav && !FAV.size){ F.onlyFav=false; store.set('filters',F); } rebuildGal(); draw(); renderFilt();
   }catch(e){}
 }
 async function toggleFav(id){
   const p = byId[id]; if(!p) return;
-  const idn = needId(); if(!idn) return;
+  const idn = await needId(); if(!idn){ openPlace(id); return; }
   const on = !FAV.has(id);
   if(on){ FAV.add(id); FAVL.push({place_id:id,nome:p.n,autor:idn.autor}); } else { FAV.delete(id); FAVL=FAVL.filter(f=>f.place_id!==id); }
   store.set('favs',FAVL); draw(); openPlace(id);
@@ -469,7 +484,7 @@ function toggleFavMode(){
 async function removeGal(id){
   const p = byId[id]; if(!p) return;
   if(!confirm('Remover "'+p.n+'" do mapa da galera para todo mundo?')) return;
-  const idn = needId(); if(!idn) return;
+  const idn = await needId(); if(!idn) return;
   try{ await send({action:'remove', id, autor:idn.autor, code:idn.code}); GAL = GAL.filter(g=>g.id!==id); store.set('galera',GAL); rebuildGal(); draw(); closeSheet(); toast('Removido.'); }catch(e){}
 }
 
@@ -533,7 +548,9 @@ function addForm(i){
 async function submitAdd(i){
   const r = SR[i]; const a = document.getElementById('fA').value.trim();
   if(a) store.set('autor',a);
-  const idn = needId(); if(!idn) return;
+  const keep = {n:document.getElementById('fN').value, c:document.getElementById('fC').value, p:document.getElementById('fP').value, o:document.getElementById('fO').value};
+  const idn = await needId(); if(!idn) return;
+  if(!document.getElementById('fN')){ addForm(i); document.getElementById('fN').value=keep.n; document.getElementById('fC').value=keep.c; document.getElementById('fP').value=keep.p; document.getElementById('fO').value=keep.o; document.getElementById('fA').value=idn.autor; }
   const body = {action:'add', nome:document.getElementById('fN').value.trim()||r.n, categoria:document.getElementById('fC').value, preco:document.getElementById('fP').value.trim(),
     obs:document.getElementById('fO').value.trim(), lat:r.lat, lon:r.lon, endereco:r.ad, link:r.oid?`https://www.openstreetmap.org/${r.oid.replace(/^N/,'node/').replace(/^W/,'way/').replace(/^R/,'relation/')}`:'', autor:idn.autor, code:idn.code, tmp:'tmp'+Date.now()};
   try{
